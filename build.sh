@@ -13,8 +13,14 @@ mkdir -p build/Macxelio.app/Contents/{MacOS,Resources}
 
 build_arch() {
     swiftc ${2} -o ${1} \
-        Sources/MacxelioApp.swift Sources/Models/*.swift Sources/Utils/*.swift Sources/Views/*.swift \
-        -framework SwiftUI -framework AppKit -target ${3}-apple-macos13.0
+        Sources/MacxelioApp.swift \
+        Sources/Models/*.swift \
+        Sources/Services/*.swift \
+        Sources/Components/*.swift \
+        Sources/Views/*.swift \
+        Sources/Utils/*.swift \
+        -framework SwiftUI -framework AppKit -framework Network \
+        -target ${3}-apple-macos13.0
 }
 
 if [ "$CONFIG" = "release" ]; then
