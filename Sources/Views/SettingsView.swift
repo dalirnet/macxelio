@@ -1,56 +1,59 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @StateObject private var settings = AppSettings()
-    
+    @ObservedObject var appConfig: AppConfig
+    @ObservedObject var xrayCore: XrayCore
+    var onBack: () -> Void
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Settings")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+        ViewLayout(
+            headerLeft: {
+                BackButton(title: "Settings") { onBack() }
+            },
+            headerRight: {
+                Button(action: openConfig) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 14))
                 }
                 .buttonStyle(.plain)
-            }
-            .padding()
-            
-            Divider()
-            
-            // Content
-            Form {
-                Section("Proxy Ports") {
-                    HStack {
-                        Text("SOCKS Port")
-                        Spacer()
-                        TextField("", value: $settings.socksPort, format: .number)
-                            .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                .help("Open Config File")
+            },
+            content: {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        FormField(label: "SOCKS Port") {
+                            TextField("10808", value: $appConfig.socksPort, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        FormField(label: "HTTP Port") {
+                            TextField("10809", value: $appConfig.httpPort, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        Divider()
+                            .padding(.vertical, 4)
+
+                        FormField(label: "Auto Connect") {
+                            Toggle("", isOn: $appConfig.autoConnect)
+                                .labelsHidden()
+                        }
+
+                        FormField(label: "Allow LAN") {
+                            Toggle("", isOn: $appConfig.allowLAN)
+                                .labelsHidden()
+                        }
                     }
-                    
-                    HStack {
-                        Text("HTTP Port")
-                        Spacer()
-                        TextField("", value: $settings.httpPort, format: .number)
-                            .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
-                    }
+                    .padding(12)
                 }
-                
-                Section("General") {
-                    Toggle("Auto-connect on launch", isOn: $settings.autoConnect)
-                }
-            }
-            .formStyle(.grouped)
-            .padding()
-        }
-        .frame(width: 350, height: 300)
+            },
+            footerLeft: { EmptyView() },
+            footerRight: { EmptyView() }
+        )
+    }
+
+    private func openConfig() {
+        let configPath = URL(fileURLWithPath: appConfig.getConfigPath())
+        NSWorkspace.shared.open(configPath)
     }
 }
