@@ -1,57 +1,38 @@
 # Macxelio
 
-> Native Xray Interface
-
-A native macOS client for managing Xray proxy configurations.
-
-## Requirements
-
-- macOS 13.0 or later
+Native macOS menu bar proxy client powered by Xray-core.
 
 ## Features
 
-- Native SwiftUI interface
-- Manage Xray proxy configurations
-- Server connection management
-- Clean and intuitive design
+- Menu bar app with quick access controls
+- Support for Shadowsocks, VLESS, VMess, Trojan, SOCKS, HTTP protocols
+- Import configs from clipboard (SS, VLESS, VMess, Trojan URIs)
+- Custom routing rules (Domain, IP, GeoIP, GeoSite)
+- DNS server and policy management
+- System proxy integration
 
-## Quick Start
+## Requirements
 
-### Build
+- macOS 13.0+
+
+## Build
 
 ```bash
 make build
 ```
 
-### Run
+## Run
 
 ```bash
 make run
 ```
 
-### Release Build
+## Release
 
 ```bash
 make release
 ```
 
-## Project Structure
-
-```
-Macxelio/
-├── Sources/
-│   ├── MacxelioApp.swift    # App entry point
-│   ├── Models/              # Data models
-│   ├── Views/               # SwiftUI views
-│   └── Utils/               # Utilities
-├── Resources/
-│   ├── Info.plist           # App configuration
-│   └── AppIcon.icns         # App icon
-├── Package.swift            # Swift package manifest
-├── Makefile                 # Build commands
-└── build.sh                 # Build script
-```
-
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT
