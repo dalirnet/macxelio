@@ -12,6 +12,10 @@ run: build
 	sleep 0.5
 	open build/Macxelio.app
 
+.PHONY: format
+format:
+	swift-format format -i -r --configuration .swift-format Sources
+
 .PHONY: clean
 clean:
 	rm -rf build .build
