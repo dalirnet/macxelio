@@ -92,17 +92,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         window.delegate = self
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        sender.orderOut(nil)
-        NSApp.setActivationPolicy(.accessory)
-        return false
-    }
-
     @objc func openMainWindow() {
         NSApp.setActivationPolicy(.regular)
         configureMainWindow()
         mainWindow()?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func hideMainWindow() {
+        NSApp.setActivationPolicy(.accessory)
+        mainWindow()?.orderOut(nil)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hideMainWindow()
+        return false
     }
 }
 
@@ -205,6 +209,7 @@ struct MacxelioApp: App {
                 if missing.isEmpty {
                     setupStep = .ready
                     appDelegate.setupStatusBar()
+                    appDelegate.hideMainWindow()
                 } else {
                     setupStep = .prepare
                 }
