@@ -11,6 +11,8 @@ A native macOS menu bar proxy client, powered by Xray-core.
 
 Built to be lean and efficient — not packed with features you'll never use. It lives in your menu bar, does its job, and stays out of the way. No accounts, no telemetry, no clutter.
 
+![Macxelio](docs/_media/screenshot.png)
+
 ## Why
 
 I relied on ClashX for years — it was the proxy client I opened every day on my Mac. Then, in late 2023, [ClashX and the wider Clash ecosystem were taken down from GitHub](https://github.com/net4people/bbs/issues/303). Its last release was v1.17.0, and it was never updated again. Because it was built on the older v2ray-core, it never supported newer Xray-core protocols like VLESS and REALITY.
