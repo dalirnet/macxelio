@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var appConfig: AppConfig
-    @ObservedObject var xrayCore: XrayCore
     var onBack: () -> Void
 
     var body: some View {
@@ -11,49 +10,56 @@ struct SettingsView: View {
                 BackButton(title: "Settings") { onBack() }
             },
             headerRight: {
-                Button(action: openConfig) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .help("Open Config File")
+                HeaderButton(icon: "folder", help: "Open Config Folder", action: openFolder)
             },
             content: {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        FormField(label: "SOCKS Port") {
-                            TextField("10808", value: $appConfig.socksPort, format: .number)
-                                .textFieldStyle(.roundedBorder)
+                        FormSection("Proxy Server", first: true)
+
+                        FormFieldRow(label: "Test Server") {
+                            Menu {
+                                ForEach(TestServer.allCases, id: \.self) { server in
+                                    Button(server.name) { appConfig.testServer = server.rawValue }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(TestServer(rawValue: appConfig.testServer)?.name ?? "")
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.system(size: 9))
+                                }
+                                .foregroundColor(.secondary)
+                            }
+                            .menuStyle(.button)
+                            .buttonStyle(.plain)
+                            .menuIndicator(.hidden)
+                            .fixedSize()
                         }
 
-                        FormField(label: "HTTP Port") {
-                            TextField("10809", value: $appConfig.httpPort, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        Divider()
-                            .padding(.vertical, 4)
-
-                        FormField(label: "Auto Connect") {
-                            Toggle("", isOn: $appConfig.autoConnect)
-                                .labelsHidden()
-                        }
-
-                        FormField(label: "Allow LAN") {
+                        FormFieldRow(label: "Allow LAN") {
                             Toggle("", isOn: $appConfig.allowLAN)
                                 .labelsHidden()
                         }
+
+                        FormSection("DNS Server")
+
+                        FormField(label: "Primary DNS", icon: "globe") {
+                            TextField("8.8.8.8", text: $appConfig.primaryDNS)
+                                .cardTextField()
+                        }
+
+                        FormField(label: "Secondary DNS", icon: "globe") {
+                            TextField("1.1.1.1", text: $appConfig.secondaryDNS)
+                                .cardTextField()
+                        }
                     }
-                    .padding(12)
+                    .padding(16)
                 }
-            },
-            footerLeft: { EmptyView() },
-            footerRight: { EmptyView() }
+            }
         )
     }
 
-    private func openConfig() {
-        let configPath = URL(fileURLWithPath: appConfig.getConfigPath())
-        NSWorkspace.shared.open(configPath)
+    private func openFolder() {
+        NSWorkspace.shared.open(Tools.dir)
     }
 }

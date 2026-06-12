@@ -3,23 +3,16 @@ import SwiftUI
 struct PrepareView: View {
     var onComplete: () -> Void
 
-    @State private var installStatus: InstallStatus = .ready
-    @State private var downloadProgress: Double = 0
-    @State private var downloadedBytes: Int64 = 0
-    @State private var elapsedSeconds: Int = 0
-    @State private var timer: Timer?
-    @State private var isCancelling = false
+    @State private var state: SetupState = .checking
+    @State private var progress: Double = 0
     @State private var downloadService: DownloadService?
+    @State private var isCancelling = false
+    @State private var pulse: CGFloat = 1.0
 
-    private let configDir: URL = {
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        return homeDir.appendingPathComponent(".config/macxelio")
-    }()
-
-    enum InstallStatus {
-        case ready
+    enum SetupState {
+        case checking
+        case needsInstall([String])
         case downloading
-        case extracting
         case done
         case failed(String)
     }
@@ -31,246 +24,189 @@ struct PrepareView: View {
             },
             headerRight: { EmptyView() },
             content: {
-                VStack(spacing: 16) {
-                    if case .ready = installStatus {
-                        readyContent
-                    } else {
-                        installingContent
+                VStack(spacing: 0) {
+                    Spacer().frame(maxHeight: 110)
+
+                    VStack(spacing: 20) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.accentColor.opacity(0.08))
+                                .frame(width: 96, height: 96)
+                                .scaleEffect(pulse)
+                            Circle()
+                                .fill(Color.accentColor.opacity(0.05))
+                                .frame(width: 72, height: 72)
+                                .scaleEffect(pulse * 0.97)
+                            iconView
+                        }
+
+                        VStack(spacing: 4) {
+                            Text(statusTitle)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
+
+                            if let subtitle = statusSubtitle {
+                                Text(subtitle)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+
+                        actionButton
                     }
+
+                    Spacer()
                 }
-                .animation(.easeInOut(duration: 0.3), value: installStatusKey)
-            },
-            footerLeft: { EmptyView() },
-            footerRight: { footerButton }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.3), value: stateKey)
+            }
         )
-    }
-
-    // MARK: - Content Views
-
-    private var readyContent: some View {
-        Group {
-            FlameIconView(isActive: true, size: 64)
-                .frame(width: 64, height: 64)
-
-            Text("Install Xray Core")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text("Download and install Xray Core")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-        }
-        .transition(.opacity)
-    }
-
-    private var installingContent: some View {
-        Group {
-            StatusIcon(status: installStatusIcon)
-
-            Text(installStatusText)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-
-            if case .downloading = installStatus {
-                VStack(spacing: 8) {
-                    ProgressView(value: downloadProgress)
-                        .progressViewStyle(.linear)
-                        .frame(width: 150)
-
-                    HStack {
-                        Text(formatBytes(downloadedBytes))
-                        Spacer()
-                        Text(formatTime(elapsedSeconds))
-                    }
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 150)
-                }
-            } else if case .extracting = installStatus {
-                ProgressView()
-                    .progressViewStyle(.linear)
-                    .frame(width: 150)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                pulse = 1.08
             }
-
-            if case .failed(let message) = installStatus {
-                Text(message)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
+            Task { await check() }
         }
-        .transition(.opacity)
     }
 
     @ViewBuilder
-    private var footerButton: some View {
-        if case .ready = installStatus {
-            Button("Continue") {
-                Task { await downloadXray() }
+    private var iconView: some View {
+        switch state {
+        case .checking:
+            ProgressView()
+                .controlSize(.small)
+        case .needsInstall:
+            Image(systemName: "shippingbox")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundColor(.accentColor)
+        case .downloading:
+            ZStack {
+                Circle()
+                    .stroke(Color.accentColor.opacity(0.2), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeOut(duration: 0.2), value: progress)
+                DownloadArrow()
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        } else if case .failed = installStatus {
-            Button("Retry") {
-                Task { await downloadXray() }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        } else if case .done = installStatus {
-            Button("Done") {
-                onComplete()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        } else {
-            Button("Cancel") { cancelDownload() }
-                .buttonStyle(.bordered)
+            .frame(width: 46, height: 46)
+        case .done:
+            Image(systemName: "checkmark")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundColor(.accentColor)
+        case .failed:
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundColor(.accentColor)
+        }
+    }
+
+    private var statusTitle: String {
+        switch state {
+        case .checking: return "Preparing"
+        case .needsInstall: return "Set up Macxelio"
+        case .downloading: return "Setting up"
+        case .done: return "Ready"
+        case .failed: return "Setup failed"
+        }
+    }
+
+    private var statusSubtitle: String? {
+        switch state {
+        case .needsInstall: return "A quick one-time setup"
+        case .failed(let message): return message
+        case .checking, .downloading, .done: return nil
+        }
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        switch state {
+        case .checking:
+            EmptyView()
+        case .needsInstall(let tools):
+            Button("Set up") { Task { await install(tools) } }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        case .downloading:
+            Button("Cancel") { cancel() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        case .done:
+            Button("Continue") { onComplete() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        case .failed:
+            Button("Retry") { Task { await check() } }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
         }
     }
 
-    private var installStatusKey: String {
-        switch installStatus {
-        case .ready: return "ready"
+    private var stateKey: String {
+        switch state {
+        case .checking: return "checking"
+        case .needsInstall: return "needsInstall"
         case .downloading: return "downloading"
-        case .extracting: return "extracting"
         case .done: return "done"
         case .failed: return "failed"
         }
     }
 
-    private var installStatusIcon: StatusIcon.Status {
-        switch installStatus {
-        case .done: return .success
-        case .failed: return .error
-        default: return .loading
-        }
+    private func check() async {
+        state = .checking
+        let missing = await Task.detached { Tools.missing() }.value
+        state = missing.isEmpty ? .done : .needsInstall(missing)
     }
 
-    private var installStatusText: String {
-        switch installStatus {
-        case .ready: return "Ready"
-        case .downloading: return "Downloading Xray Core"
-        case .extracting: return "Extracting"
-        case .done: return "Installation complete"
-        case .failed: return "Installation failed"
-        }
-    }
+    private func install(_ tools: [String]) async {
+        progress = 0
+        state = .downloading
+        let total = Double(tools.count)
 
-    private func formatBytes(_ bytes: Int64) -> String {
-        let kb = Double(bytes) / 1024
-        let mb = kb / 1024
-        if mb >= 1 {
-            return String(format: "%.1f MB", mb)
-        } else {
-            return String(format: "%.0f KB", kb)
-        }
-    }
+        for (index, tool) in tools.enumerated() {
+            let service = DownloadService()
+            downloadService = service
+            let ok = await service.install(tool) { self.progress = (Double(index) + $0) / total }
+            downloadService = nil
 
-    private func formatTime(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%02d:%02d", mins, secs)
-    }
-
-    private func startTimer() {
-        elapsedSeconds = 0
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            elapsedSeconds += 1
-        }
-    }
-
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func downloadXray() async {
-        installStatus = .downloading
-        downloadProgress = 0
-        downloadedBytes = 0
-        startTimer()
-
-        let arch = DownloadService.getArchitecture()
-        let downloadURL =
-            "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-macos-\(arch).zip"
-
-        guard let url = URL(string: downloadURL) else {
-            stopTimer()
-            installStatus = .failed("Invalid URL")
-            return
-        }
-
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
-
-        let tempZipPath = configDir.appendingPathComponent("xray.zip")
-        let xrayBinaryPath = configDir.appendingPathComponent("xray")
-
-        let service = DownloadService()
-        downloadService = service
-
-        do {
-            let localURL: URL = try await withCheckedThrowingContinuation { continuation in
-                service.download(
-                    from: url,
-                    progress: { progress, bytes in
-                        DispatchQueue.main.async {
-                            self.downloadProgress = progress
-                            self.downloadedBytes = bytes
-                        }
-                    },
-                    completion: { result in
-                        continuation.resume(with: result)
-                    })
-            }
-
-            stopTimer()
-
-            try? FileManager.default.removeItem(at: tempZipPath)
-            try FileManager.default.moveItem(at: localURL, to: tempZipPath)
-
-            await MainActor.run { installStatus = .extracting }
-
-            let success = await DownloadService.extractZip(tempZipPath, to: configDir)
-
-            try? FileManager.default.removeItem(at: tempZipPath)
-
-            if success {
-                try? FileManager.default.setAttributes(
-                    [.posixPermissions: 0o755],
-                    ofItemAtPath: xrayBinaryPath.path
-                )
-
-                if FileManager.default.fileExists(atPath: xrayBinaryPath.path) {
-                    await MainActor.run { installStatus = .done }
-                } else {
-                    await MainActor.run {
-                        installStatus = .failed("Binary not found after extraction")
-                    }
-                }
-            } else {
-                await MainActor.run { installStatus = .failed("Extraction failed") }
-            }
-
-        } catch let error as NSError {
-            stopTimer()
             if isCancelling {
-                await MainActor.run {
-                    isCancelling = false
-                    installStatus = .ready
-                }
+                isCancelling = false
+                await check()
                 return
             }
-            let message = error.localizedDescription
-            await MainActor.run { installStatus = .failed(message) }
+            if !ok {
+                state = .failed("Check your connection and try again")
+                return
+            }
         }
+        progress = 1
+        state = .done
     }
 
-    private func cancelDownload() {
+    private func cancel() {
         isCancelling = true
         downloadService?.cancel()
-        downloadService = nil
-        stopTimer()
+    }
+}
+
+private struct DownloadArrow: View {
+    @State private var animate = false
+
+    var body: some View {
+        Image(systemName: "arrow.down")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.accentColor)
+            .offset(y: animate ? 5 : -1)
+            .opacity(animate ? 0 : 0.8)
+            .onAppear {
+                withAnimation(.easeIn(duration: 1).repeatForever(autoreverses: false)) {
+                    animate = true
+                }
+            }
     }
 }

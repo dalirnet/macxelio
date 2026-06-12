@@ -12,11 +12,7 @@ struct RulesView: View {
                 BackButton(title: "Rules") { onBack() }
             },
             headerRight: {
-                Button(action: { onAdd() }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
+                HeaderButton(icon: "plus", help: "Add Rule") { onAdd() }
             },
             content: {
                 if appConfig.rules.isEmpty {
@@ -24,32 +20,26 @@ struct RulesView: View {
                 } else {
                     StyledList(
                         appConfig.rules,
+                        onEdit: { rule in onEdit(rule) },
                         onDelete: { rule in
                             appConfig.deleteRule(rule)
                         }
                     ) { rule in
-                        RuleRow(rule: rule, onEdit: { onEdit(rule) })
+                        RuleRow(rule: rule)
                     }
                 }
-            },
-            footerLeft: {
-                Text("\(appConfig.rules.count) rules")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-            },
-            footerRight: { EmptyView() }
+            }
         )
     }
 }
 
 struct RuleRow: View {
     let rule: Rule
-    let onEdit: () -> Void
 
     var body: some View {
         StyledListRow(
             left: {
-                Text(rule.pattern)
+                Text(rule.barePattern)
                     .font(.system(size: 13, design: .monospaced))
                     .lineLimit(1)
             },
@@ -60,8 +50,5 @@ struct RuleRow: View {
                 }
             }
         )
-        .onTapGesture {
-            onEdit()
-        }
     }
 }

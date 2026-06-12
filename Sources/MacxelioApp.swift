@@ -1,21 +1,33 @@
+import Combine
 import SwiftUI
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     var statusItem: NSStatusItem?
     var statusMenu: NSMenu?
+    private var statusObserver: AnyCancellable?
+    private var blinkTimer: Timer?
 
     let appConfig = AppConfig.shared
     let xrayCore = XrayCore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Start xray service when app launches (if installed)
         if xrayCore.isInstalled() {
             appConfig.save()
             xrayCore.start()
+            if appConfig.systemProxyEnabled { SystemProxy.apply(true) }
+            if appConfig.dnsServerEnabled {
+                DispatchQueue.global().async {
+                    if !SystemDNS.enable() {
+                        DispatchQueue.main.async { self.appConfig.dnsServerEnabled = false }
+                    }
+                }
+            }
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if appConfig.systemProxyEnabled { SystemProxy.apply(false) }
+        if SystemDNS.isInstalled() { SystemDNS.disable() }
         xrayCore.stop()
     }
 
@@ -23,11 +35,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         false
     }
 
+    @MainActor
     func setupStatusBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem?.button {
-            let image = FlameIcon.createMenuBarImage(size: 18)
+            let image = FlameIcon.createMenuBarImage(size: 20)
             image.isTemplate = true
             button.image = image
         }
@@ -35,9 +48,52 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusMenu = NSMenu()
         statusMenu?.delegate = self
         statusItem?.menu = statusMenu
+
+        ConnectivityChecker.shared.start()
+        statusObserver = ConnectivityChecker.shared.$status
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in self?.updateStatusAppearance(status) }
+
+        configureMainWindow()
     }
 
-    // MARK: - NSMenuDelegate
+    private func updateStatusAppearance(_ status: ConnectivityChecker.Status) {
+        guard status == .checking else {
+            blinkTimer?.invalidate()
+            blinkTimer = nil
+            if case .ok = status {
+                statusItem?.button?.alphaValue = 1.0
+            } else {
+                statusItem?.button?.alphaValue = 0.5
+            }
+            return
+        }
+        guard blinkTimer == nil else { return }
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
+            guard let button = self?.statusItem?.button else { return }
+            let target: CGFloat = button.alphaValue < 1 ? 1.0 : 0.5
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.35
+                button.animator().alphaValue = target
+            }
+        }
+    }
+
+    private func mainWindow() -> NSWindow? {
+        NSApp.windows.first { $0.contentView != nil && !$0.title.contains("Item") }
+    }
+
+    private func configureMainWindow() {
+        guard let window = mainWindow() else { return }
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        NSApp.setActivationPolicy(.accessory)
+        return false
+    }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
@@ -45,7 +101,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func buildMenu(_ menu: NSMenu) {
-        // Proxy mode submenu
+        let openItem = NSMenuItem()
+        openItem.title = "Open Macxelio"
+        openItem.target = self
+        openItem.action = #selector(openMainWindow)
+        menu.addItem(openItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let modeItem = NSMenuItem()
         modeItem.title = "Proxy Mode"
         let modeSubmenu = NSMenu()
@@ -63,82 +126,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Config list
-        if !appConfig.configs.isEmpty {
-            for config in appConfig.configs {
-                let item = NSMenuItem()
-                item.title = config.name
-                item.state = appConfig.selectedConfigId == config.id ? .on : .off
-                item.representedObject = config.id
-                item.target = self
-                item.action = #selector(selectConfig(_:))
-
-                if let ping = config.ping {
-                    item.title = "\(config.name)  —  \(ping)ms"
-                }
-
-                menu.addItem(item)
-            }
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        // System Proxy toggle
         let systemProxyItem = NSMenuItem()
         systemProxyItem.title = "System Proxy"
-        systemProxyItem.state = appConfig.systemProxyEnabled ? .on : .off
-        systemProxyItem.target = self
-        systemProxyItem.action = #selector(toggleSystemProxy)
+        let proxySubmenu = NSMenu()
+        for enabled in [true, false] {
+            let item = NSMenuItem()
+            item.title = enabled ? "Enabled" : "Disabled"
+            item.state = appConfig.systemProxyEnabled == enabled ? .on : .off
+            item.representedObject = enabled
+            item.target = self
+            item.action = #selector(setSystemProxy(_:))
+            proxySubmenu.addItem(item)
+        }
+        systemProxyItem.submenu = proxySubmenu
         menu.addItem(systemProxyItem)
 
-        // DNS Server toggle
         let dnsItem = NSMenuItem()
-        dnsItem.title = "DNS Server"
-        dnsItem.state = appConfig.dnsServerEnabled ? .on : .off
-        dnsItem.target = self
-        dnsItem.action = #selector(toggleDNS)
+        dnsItem.title = "System DNS"
+        let dnsSubmenu = NSMenu()
+        for enabled in [true, false] {
+            let item = NSMenuItem()
+            item.title = enabled ? "Enabled" : "Disabled"
+            item.state = appConfig.dnsServerEnabled == enabled ? .on : .off
+            item.representedObject = enabled
+            item.target = self
+            item.action = #selector(setSystemDNS(_:))
+            dnsSubmenu.addItem(item)
+        }
+        dnsItem.submenu = dnsSubmenu
         menu.addItem(dnsItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Copy proxy command
-        let copyItem = NSMenuItem()
-        copyItem.title = "Copy Proxy Command"
-        copyItem.target = self
-        copyItem.action = #selector(copyProxyCommand)
-        menu.addItem(copyItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // Quick access items
-        let dnsViewItem = NSMenuItem()
-        dnsViewItem.title = "DNS"
-        dnsViewItem.target = self
-        dnsViewItem.action = #selector(openDNS)
-        menu.addItem(dnsViewItem)
-
-        let configsItem = NSMenuItem()
-        configsItem.title = "Configs"
-        configsItem.target = self
-        configsItem.action = #selector(openConfigs)
-        menu.addItem(configsItem)
-
-        let rulesItem = NSMenuItem()
-        rulesItem.title = "Rules"
-        rulesItem.target = self
-        rulesItem.action = #selector(openRules)
-        menu.addItem(rulesItem)
-
-        let settingsItem = NSMenuItem()
-        settingsItem.title = "Settings"
-        settingsItem.target = self
-        settingsItem.action = #selector(openSettings)
-        settingsItem.keyEquivalent = ","
-        settingsItem.keyEquivalentModifierMask = .command
-        menu.addItem(settingsItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // Quit
         let quitItem = NSMenuItem()
         quitItem.title = "Quit Macxelio"
         quitItem.target = self
@@ -148,78 +167,42 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quitItem)
     }
 
-    // MARK: - Actions
-
     @objc func setProxyMode(_ sender: NSMenuItem) {
         if let mode = sender.representedObject as? AppConfig.ProxyMode {
             appConfig.proxyMode = mode
         }
     }
 
-    @objc func selectConfig(_ sender: NSMenuItem) {
-        if let configId = sender.representedObject as? UUID {
-            if appConfig.selectedConfigId == configId {
-                appConfig.selectedConfigId = nil
-            } else {
-                appConfig.selectedConfigId = configId
-            }
+    @objc func setSystemProxy(_ sender: NSMenuItem) {
+        if let enabled = sender.representedObject as? Bool {
+            appConfig.systemProxyEnabled = enabled
+            SystemProxy.apply(enabled)
         }
     }
 
-    @objc func toggleSystemProxy() {
-        appConfig.systemProxyEnabled.toggle()
-    }
-
-    @objc func toggleDNS() {
-        appConfig.dnsServerEnabled.toggle()
-    }
-
-    @objc func copyProxyCommand() {
-        let command = """
-            export http_proxy=http://127.0.0.1:\(appConfig.httpPort)
-            export https_proxy=http://127.0.0.1:\(appConfig.httpPort)
-            """
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(command, forType: .string)
-    }
-
-    @objc func openConfigs() {
-        openMainWindow()
-        NotificationCenter.default.post(name: .addConfig, object: nil)
-    }
-
-    @objc func openRules() {
-        openMainWindow()
-        NotificationCenter.default.post(name: .openRules, object: nil)
-    }
-
-    @objc func openDNS() {
-        openMainWindow()
-        NotificationCenter.default.post(name: .openDNS, object: nil)
-    }
-
-    @objc func openConnections() {
-        openMainWindow()
-        NotificationCenter.default.post(name: .openConnections, object: nil)
-    }
-
-    @objc func openSettings() {
-        openMainWindow()
-        NotificationCenter.default.post(name: .openSettings, object: nil)
+    @objc func setSystemDNS(_ sender: NSMenuItem) {
+        if let enabled = sender.representedObject as? Bool {
+            appConfig.dnsServerEnabled = enabled
+            DispatchQueue.global().async {
+                let success = enabled ? SystemDNS.enable() : SystemDNS.disable()
+                if !success {
+                    DispatchQueue.main.async {
+                        self.appConfig.dnsServerEnabled = !enabled
+                    }
+                }
+            }
+        }
     }
 
     @objc func quitApp() {
         NSApp.terminate(nil)
     }
 
-    private func openMainWindow() {
-        for window in NSApp.windows {
-            if window.contentView != nil && !window.title.contains("Item") {
-                window.makeKeyAndOrderFront(nil)
-                NSApp.activate(ignoringOtherApps: true)
-                return
-            }
-        }
+    @objc func openMainWindow() {
+        NSApp.setActivationPolicy(.regular)
+        configureMainWindow()
+        mainWindow()?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
@@ -232,7 +215,6 @@ struct MacxelioApp: App {
     enum SetupStep {
         case checking
         case prepare
-        case configuration
         case ready
     }
 
@@ -244,10 +226,6 @@ struct MacxelioApp: App {
                     EmptyView()
                 case .prepare:
                     PrepareView {
-                        setupStep = .configuration
-                    }
-                case .configuration:
-                    ConfigurationView {
                         setupStep = .ready
                         appDelegate.appConfig.save()
                         appDelegate.xrayCore.start()
@@ -286,40 +264,35 @@ struct MacxelioApp: App {
 
             CommandGroup(after: .newItem) {
                 Button(action: {
-                    NotificationCenter.default.post(name: .openConnections, object: nil)
-                }) {
-                    Label("Connections", systemImage: "network")
-                }
-                .disabled(setupStep != .ready)
-
-                Button(action: {
                     NotificationCenter.default.post(name: .openRules, object: nil)
                 }) {
                     Label("Rules", systemImage: "list.bullet.rectangle")
                 }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(setupStep != .ready)
 
                 Button(action: {
-                    NotificationCenter.default.post(name: .openDNS, object: nil)
+                    NotificationCenter.default.post(name: .openHosts, object: nil)
                 }) {
-                    Label("DNS", systemImage: "server.rack")
+                    Label("Hosts", systemImage: "doc.plaintext")
                 }
-                .disabled(setupStep != .ready)
-
-                Divider()
-
-                Button(action: {
-                    NotificationCenter.default.post(name: .openAppUpdate, object: nil)
-                }) {
-                    Label("App Update", systemImage: "arrow.down.app")
-                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
                 .disabled(setupStep != .ready)
 
                 Button(action: {
-                    NotificationCenter.default.post(name: .openXrayUpdate, object: nil)
+                    NotificationCenter.default.post(name: .openEnvironments, object: nil)
                 }) {
-                    Label("Xray Update", systemImage: "shippingbox")
+                    Label("Environments", systemImage: "square.grid.2x2")
                 }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(setupStep != .ready)
+
+                Button(action: {
+                    NotificationCenter.default.post(name: .openConnections, object: nil)
+                }) {
+                    Label("Connections", systemImage: "network")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(setupStep != .ready)
 
                 Divider()
@@ -336,22 +309,25 @@ struct MacxelioApp: App {
     }
 
     private func checkXrayAvailability() {
-        if appDelegate.xrayCore.isInstalled() {
-            setupStep = .ready
-            appDelegate.setupStatusBar()
-        } else {
-            setupStep = .prepare
+        Task.detached {
+            let missing = Tools.missing()
+            await MainActor.run {
+                if missing.isEmpty {
+                    setupStep = .ready
+                    appDelegate.setupStatusBar()
+                } else {
+                    setupStep = .prepare
+                }
+            }
         }
     }
 }
 
 extension Notification.Name {
-    static let openSettings = Notification.Name("openSettings")
-    static let addConfig = Notification.Name("addConfig")
-    static let openHelp = Notification.Name("openHelp")
-    static let openAppUpdate = Notification.Name("openAppUpdate")
-    static let openXrayUpdate = Notification.Name("openXrayUpdate")
-    static let openConnections = Notification.Name("openConnections")
     static let openRules = Notification.Name("openRules")
-    static let openDNS = Notification.Name("openDNS")
+    static let openHosts = Notification.Name("openHosts")
+    static let openEnvironments = Notification.Name("openEnvironments")
+    static let openConnections = Notification.Name("openConnections")
+    static let openSettings = Notification.Name("openSettings")
+    static let openHelp = Notification.Name("openHelp")
 }

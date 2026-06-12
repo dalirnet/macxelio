@@ -1,57 +1,35 @@
 import SwiftUI
 
-struct ViewLayout<
-    HeaderLeft: View, HeaderRight: View, Content: View, FooterLeft: View, FooterRight: View
->: View {
+struct ViewLayout<HeaderLeft: View, HeaderRight: View, Content: View>: View {
     let headerLeft: HeaderLeft
     let headerRight: HeaderRight
     let content: Content
-    let footerLeft: FooterLeft
-    let footerRight: FooterRight
 
     init(
         @ViewBuilder headerLeft: () -> HeaderLeft,
         @ViewBuilder headerRight: () -> HeaderRight,
-        @ViewBuilder content: () -> Content,
-        @ViewBuilder footerLeft: () -> FooterLeft,
-        @ViewBuilder footerRight: () -> FooterRight
+        @ViewBuilder content: () -> Content
     ) {
         self.headerLeft = headerLeft()
         self.headerRight = headerRight()
         self.content = content()
-        self.footerLeft = footerLeft()
-        self.footerRight = footerRight()
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 headerLeft
                 Spacer()
                 headerRight
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(height: 44)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(height: 48)
 
             Divider()
 
-            // Content
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider()
-
-            // Footer
-            HStack {
-                footerLeft
-                Spacer()
-                footerRight
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(height: 44)
         }
         .frame(width: 320, height: 480)
     }
@@ -68,10 +46,43 @@ struct BackButton: View {
                     .font(.system(size: 12))
                     .frame(width: 14, height: 14)
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13, weight: .semibold))
             }
         }
         .buttonStyle(.plain)
+        .keyboardShortcut(.cancelAction)
+    }
+}
+
+struct HeaderButton: View {
+    let icon: String
+    var help: String = ""
+    var size: CGFloat = 14
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: size))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+struct SaveButton: View {
+    var disabled: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.arrow.down")
+                .font(.system(size: 15))
+        }
+        .buttonStyle(.plain)
+        .help("Save")
+        .disabled(disabled)
+        .keyboardShortcut(.defaultAction)
     }
 }
 
@@ -82,11 +93,11 @@ struct HeaderTitle: View {
     var body: some View {
         HStack(spacing: 6) {
             if showFlame {
-                FlameIconView(isActive: false, size: 18)
-                    .frame(width: 18, height: 18)
+                FlameIconView(isActive: false, size: 16)
+                    .frame(width: 16, height: 16)
             }
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 13, weight: .semibold))
         }
     }
 }

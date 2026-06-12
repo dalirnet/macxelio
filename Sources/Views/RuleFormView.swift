@@ -8,10 +8,19 @@ struct RuleFormView: View {
     @State private var type: Rule.RuleType = .domain
     @State private var pattern = ""
     @State private var action: Rule.RuleAction = .direct
-    @State private var validationResult: String?
 
     var isEditing: Bool { editingRule != nil }
-    var isValid: Bool { !pattern.isEmpty }
+
+    private var patternError: String? {
+        guard !pattern.isEmpty else { return nil }
+        switch type {
+        case .domain: return Validator.domainError(pattern)
+        case .ip: return Validator.ipOrCIDRError(pattern)
+        case .geoip, .geosite: return Validator.codeError(pattern)
+        }
+    }
+
+    var isValid: Bool { !pattern.isEmpty && patternError == nil }
 
     var body: some View {
         ViewLayout(
@@ -19,60 +28,42 @@ struct RuleFormView: View {
                 BackButton(title: isEditing ? "Edit Rule" : "Add Rule") { onBack() }
             },
             headerRight: {
-                Button("Save") { saveRule() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(!isValid)
+                SaveButton(disabled: !isValid) { saveRule() }
             },
             content: {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        FormField(label: "Type") {
-                            Picker("", selection: $type) {
-                                ForEach(Rule.RuleType.allCases, id: \.self) { t in
-                                    Text(t.abbreviation).tag(t)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
+                        FormSection("Match", first: true)
+
+                        FormField(label: "Type", icon: "line.3.horizontal.decrease.circle") {
+                            SelectBox(
+                                Rule.RuleType.allCases.map { ($0, $0.rawValue) },
+                                selection: $type
+                            )
                         }
 
-                        FormField(label: "Pattern") {
+                        FormField(label: "Pattern", icon: "textformat", error: patternError) {
                             TextField(patternPlaceholder, text: $pattern)
-                                .textFieldStyle(.roundedBorder)
+                                .cardTextField()
                         }
 
-                        FormField(label: "Action") {
-                            Picker("", selection: $action) {
-                                ForEach(Rule.RuleAction.allCases, id: \.self) { a in
-                                    Text(a.abbreviation).tag(a)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                        }
+                        FormSection("Then")
 
-                        if let result = validationResult {
-                            Text(result)
-                                .font(.caption)
-                                .foregroundColor(result.contains("✓") ? .green : .orange)
+                        FormField(label: "Action", icon: "arrow.triangle.branch") {
+                            SelectBox(
+                                Rule.RuleAction.allCases.map { ($0, $0.rawValue) },
+                                selection: $action
+                            )
                         }
                     }
-                    .padding(12)
+                    .padding(16)
                 }
-            },
-            footerLeft: { EmptyView() },
-            footerRight: {
-                Button("Validate") { validatePattern() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(pattern.isEmpty)
             }
         )
         .onAppear {
             if let rule = editingRule {
                 type = rule.type
-                pattern = rule.pattern
+                pattern = rule.barePattern
                 action = rule.action
             }
         }
@@ -82,8 +73,8 @@ struct RuleFormView: View {
         switch type {
         case .domain: return "*.google.com"
         case .ip: return "192.168.0.0/16"
-        case .geoip: return "geoip:ir"
-        case .geosite: return "geosite:category-ads"
+        case .geoip: return "ir"
+        case .geosite: return "category-ads"
         }
     }
 
@@ -103,25 +94,5 @@ struct RuleFormView: View {
         }
 
         onBack()
-    }
-
-    private func validatePattern() {
-        switch type {
-        case .domain:
-            validationResult =
-                (pattern.contains(".") || pattern.hasPrefix("*"))
-                ? "✓ Valid domain pattern" : "⚠ Should contain a dot or start with *"
-        case .ip:
-            validationResult =
-                (pattern.contains("/") || pattern.contains("."))
-                ? "✓ Valid IP pattern" : "⚠ Should be IP or CIDR notation"
-        case .geoip:
-            validationResult =
-                pattern.hasPrefix("geoip:") ? "✓ Valid GeoIP pattern" : "⚠ Should start with geoip:"
-        case .geosite:
-            validationResult =
-                pattern.hasPrefix("geosite:")
-                ? "✓ Valid GeoSite pattern" : "⚠ Should start with geosite:"
-        }
     }
 }
