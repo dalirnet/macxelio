@@ -152,7 +152,8 @@ class XrayCore: ObservableObject {
 
     private static func knownPort(in text: String) -> Int? {
         let ports = [
-            AppConfig.apiPort, AppConfig.testPort, AppConfig.httpPort, AppConfig.socksPort,
+            AppConfig.apiPort, AppConfig.testPort,
+            AppConfig.shared.httpPort, AppConfig.shared.socksPort,
         ]
         return ports.first { text.contains("\($0)") }
     }

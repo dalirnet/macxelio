@@ -5,9 +5,9 @@ enum SystemProxy {
         guard let service = Network.activeService() else { return }
         let host = "127.0.0.1"
         if enabled {
-            networksetup("-setwebproxy", service, host, "\(AppConfig.httpPort)")
-            networksetup("-setsecurewebproxy", service, host, "\(AppConfig.httpPort)")
-            networksetup("-setsocksfirewallproxy", service, host, "\(AppConfig.socksPort)")
+            networksetup("-setwebproxy", service, host, "\(AppConfig.shared.httpPort)")
+            networksetup("-setsecurewebproxy", service, host, "\(AppConfig.shared.httpPort)")
+            networksetup("-setsocksfirewallproxy", service, host, "\(AppConfig.shared.socksPort)")
         } else {
             networksetup("-setwebproxystate", service, "off")
             networksetup("-setsecurewebproxystate", service, "off")

@@ -40,26 +40,62 @@ extension AppDelegate {
     }
 
     private func openMenuItem() -> NSMenuItem {
-        let name =
-            appConfig.proxies.first { $0.id == appConfig.selectedProxyId }?.name
-            ?? "Open Macxelio"
-        let status = MainActor.assumeIsolated { ConnectivityChecker.shared.status }
-        let row = MenuRow(
-            title: name, badge: MenuIcon.latencyBadge(for: status),
-            target: self, action: #selector(openMainPage))
-        menuRow = row
-
         let item = NSMenuItem()
-        item.title = name
-        item.view = row
+        item.title =
+            appConfig.proxies.first { $0.id == appConfig.selectedProxyId }?.name
+            ?? "No Proxy"
+        if !appConfig.proxies.isEmpty {
+            item.submenu = proxySubmenu()
+        }
+        let status = MainActor.assumeIsolated { ConnectivityChecker.shared.status }
+        applyStatus(displayStatus(for: status), to: item)
+        statusMenuItem = item
         return item
     }
 
-    private func parentItem(_ title: String, image: NSImage?, submenu: NSMenu) -> NSMenuItem {
+    func refreshStatusMenuItem(_ status: ConnectivityChecker.Status) {
+        if case .checking = status {} else { lastResolvedStatus = status }
+        if let item = statusMenuItem {
+            applyStatus(displayStatus(for: status), to: item)
+        }
+    }
+
+    private func displayStatus(for status: ConnectivityChecker.Status) -> ConnectivityChecker.Status
+    {
+        if case .checking = status { return lastResolvedStatus }
+        return status
+    }
+
+    private func applyStatus(_ status: ConnectivityChecker.Status, to item: NSMenuItem) {
+        item.image = MenuIcon.statusIcon(for: status)
+        guard #available(macOS 14.0, *) else { return }
+        if let text = status.latencyText {
+            item.badge = NSMenuItemBadge(string: text)
+        } else {
+            item.badge = nil
+        }
+    }
+
+    private func proxySubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        submenu.addItem(checkMenuItem())
+        submenu.addItem(.separator())
+        for proxy in appConfig.proxies {
+            let item = NSMenuItem()
+            item.title = proxy.name
+            item.state = appConfig.selectedProxyId == proxy.id ? .on : .off
+            item.representedObject = proxy.id
+            item.target = self
+            item.action = #selector(selectProxy(_:))
+            submenu.addItem(item)
+        }
+        return submenu
+    }
+
+    private func checkMenuItem() -> NSMenuItem {
         let item = NSMenuItem()
-        item.title = title
-        item.image = image
-        item.submenu = submenu
+        item.view = MenuActionRow(
+            title: "Check Now", target: self, action: #selector(checkConnectivity))
         return item
     }
 
@@ -104,12 +140,25 @@ extension AppDelegate {
     }
 
     private func quitMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
-        item.title = "Quit Macxelio"
-        item.target = self
-        item.action = #selector(quitApp)
+        let item = actionItem("Quit Macxelio", action: #selector(quitApp))
         item.keyEquivalent = "q"
         item.keyEquivalentModifierMask = .command
+        return item
+    }
+
+    private func parentItem(_ title: String, image: NSImage?, submenu: NSMenu) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.title = title
+        item.image = image
+        item.submenu = submenu
+        return item
+    }
+
+    private func actionItem(_ title: String, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.title = title
+        item.target = self
+        item.action = action
         return item
     }
 
@@ -144,9 +193,16 @@ extension AppDelegate {
         NSApp.terminate(nil)
     }
 
-    @objc func openMainPage() {
-        openMainWindow()
-        NotificationCenter.default.post(name: .openMain, object: nil)
+    @objc func checkConnectivity() {
+        MainActor.assumeIsolated { ConnectivityChecker.shared.check() }
+    }
+
+    @objc func selectProxy(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? UUID, appConfig.selectedProxyId != id else {
+            return
+        }
+        appConfig.selectedProxyId = id
+        MainActor.assumeIsolated { ConnectivityChecker.shared.check() }
     }
 
     @objc func openPage(_ sender: NSMenuItem) {
@@ -157,6 +213,7 @@ extension AppDelegate {
 }
 
 enum MenuPage: CaseIterable {
+    case proxies
     case rules
     case hosts
     case environments
@@ -164,6 +221,7 @@ enum MenuPage: CaseIterable {
 
     var title: String {
         switch self {
+        case .proxies: return "Proxies"
         case .rules: return "Rules"
         case .hosts: return "Hosts"
         case .environments: return "Environments"
@@ -173,8 +231,9 @@ enum MenuPage: CaseIterable {
 
     var symbol: String {
         switch self {
-        case .rules: return "list.bullet.rectangle"
-        case .hosts: return "doc.plaintext"
+        case .proxies: return "bolt"
+        case .rules: return "signpost.right.and.left"
+        case .hosts: return "server.rack"
         case .environments: return "square.grid.2x2"
         case .connections: return "network"
         }
@@ -182,6 +241,7 @@ enum MenuPage: CaseIterable {
 
     var key: String {
         switch self {
+        case .proxies: return "p"
         case .rules: return "r"
         case .hosts: return "h"
         case .environments: return "e"
@@ -191,6 +251,7 @@ enum MenuPage: CaseIterable {
 
     var notification: Notification.Name {
         switch self {
+        case .proxies: return .openMain
         case .rules: return .openRules
         case .hosts: return .openHosts
         case .environments: return .openEnvironments

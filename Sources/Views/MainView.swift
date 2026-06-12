@@ -109,7 +109,7 @@ struct MainView: View {
             },
             content: {
                 if appConfig.proxies.isEmpty {
-                    EmptyState("No proxies yet", icon: "bolt.horizontal")
+                    EmptyState("No proxies yet", icon: "bolt")
                 } else {
                     StyledList(
                         appConfig.proxies,
@@ -118,24 +118,26 @@ struct MainView: View {
                             appConfig.deleteProxy(proxy)
                         }
                     ) { proxy in
+                        let isSelected = appConfig.selectedProxyId == proxy.id
                         ProxyRow(
                             proxy: proxy,
-                            isSelected: appConfig.selectedProxyId == proxy.id,
-                            status: appConfig.selectedProxyId == proxy.id
-                                ? connectivity.status : .unknown,
-                            checkInterval: appConfig.selectedProxyId == proxy.id
-                                ? connectivity.nextInterval : 0,
-                            checkSequence: appConfig.selectedProxyId == proxy.id
-                                ? connectivity.checkSequence : 0,
+                            isSelected: isSelected,
+                            status: isSelected ? connectivity.status : .unknown,
+                            checkInterval: isSelected ? connectivity.nextInterval : 0,
+                            checkSequence: isSelected ? connectivity.checkSequence : 0,
                             xrayRunning: xrayCore.isRunning,
                             isRestarting: xrayCore.isRestarting,
                             onSelect: {
-                                guard appConfig.selectedProxyId != proxy.id else { return }
+                                guard !isSelected else { return }
                                 appConfig.selectedProxyId = proxy.id
                                 connectivity.check()
                             },
                             onRestart: {
                                 xrayCore.restart()
+                                connectivity.check()
+                            },
+                            onCheck: {
+                                if !isSelected { appConfig.selectedProxyId = proxy.id }
                                 connectivity.check()
                             }
                         )
@@ -156,13 +158,24 @@ struct ProxyRow: View {
     var isRestarting: Bool = false
     let onSelect: () -> Void
     var onRestart: (() -> Void)? = nil
+    var onCheck: (() -> Void)? = nil
 
     @State private var spin = false
 
     var body: some View {
         HStack(spacing: 12) {
             StatusAvatar(
-                status: status, checkInterval: checkInterval, checkSequence: checkSequence)
+                status: status, checkInterval: checkInterval, checkSequence: checkSequence
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .onTapGesture {
+                if case .checking = status { return }
+                onCheck?()
+            }
+            .onHover { hovering in
+                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .help("Check connectivity")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(proxy.name)

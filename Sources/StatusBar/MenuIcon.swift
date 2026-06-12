@@ -1,41 +1,11 @@
 import AppKit
 
 enum MenuIcon {
-    static func latencyBadge(for status: ConnectivityChecker.Status) -> NSImage {
-        let text: String
-        switch status {
-        case .ok: text = status.latencyText ?? ""
-        case .checking: text = "CHECKING"
-        case .error: text = "ERROR"
-        case .unknown: text = "UNKNOWN"
-        }
-
-        let color = NSColor(status.color)
-        let font = NSFont.systemFont(ofSize: 9, weight: .semibold)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: color,
-        ]
-        let textSize = (text as NSString).size(withAttributes: attributes)
-
-        let hPadding: CGFloat = 5
-        let vPadding: CGFloat = 2
-        let lineWidth: CGFloat = 1
-        let width = ceil(textSize.width) + hPadding * 2
-        let height = ceil(textSize.height) + vPadding * 2
-
-        let image = NSImage(size: NSSize(width: width, height: height))
-        image.lockFocus()
-        let rect = NSRect(x: 0, y: 0, width: width, height: height).insetBy(
-            dx: lineWidth / 2, dy: lineWidth / 2)
-        let path = NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2)
-        path.lineWidth = lineWidth
-        color.setStroke()
-        path.stroke()
-        (text as NSString).draw(
-            at: NSPoint(x: hPadding, y: vPadding), withAttributes: attributes)
-        image.unlockFocus()
-        image.isTemplate = false
+    static func statusIcon(for status: ConnectivityChecker.Status) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(paletteColors: [NSColor(status.color)])
+        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = false
         return image
     }
 

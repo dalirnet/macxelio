@@ -5,8 +5,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     var statusItem: NSStatusItem?
     var statusMenu: NSMenu?
     private var statusObserver: AnyCancellable?
-    private var blinkTimer: Timer?
-    weak var menuRow: MenuRow?
+    weak var statusMenuItem: NSMenuItem?
+    var lastResolvedStatus: ConnectivityChecker.Status = .unknown
 
     let appConfig = AppConfig.shared
     let xrayCore = XrayCore()
@@ -59,26 +59,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
 
     private func updateStatusAppearance(_ status: ConnectivityChecker.Status) {
-        menuRow?.updateBadge(MenuIcon.latencyBadge(for: status))
+        refreshStatusMenuItem(status)
 
-        guard status == .checking else {
-            blinkTimer?.invalidate()
-            blinkTimer = nil
-            if case .ok = status {
-                statusItem?.button?.alphaValue = 1.0
-            } else {
-                statusItem?.button?.alphaValue = 0.5
-            }
-            return
-        }
-        guard blinkTimer == nil else { return }
-        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
-            guard let button = self?.statusItem?.button else { return }
-            let target: CGFloat = button.alphaValue < 1 ? 1.0 : 0.5
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.35
-                button.animator().alphaValue = target
-            }
+        let effective = status == .checking ? lastResolvedStatus : status
+        if case .ok = effective {
+            statusItem?.button?.alphaValue = 1.0
+        } else {
+            statusItem?.button?.alphaValue = 0.5
         }
     }
 
@@ -92,17 +79,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         window.delegate = self
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        sender.orderOut(nil)
-        NSApp.setActivationPolicy(.accessory)
-        return false
-    }
-
     @objc func openMainWindow() {
         NSApp.setActivationPolicy(.regular)
         configureMainWindow()
         mainWindow()?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func hideMainWindow() {
+        NSApp.setActivationPolicy(.accessory)
+        mainWindow()?.orderOut(nil)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hideMainWindow()
+        return false
     }
 }
 
@@ -205,6 +196,7 @@ struct MacxelioApp: App {
                 if missing.isEmpty {
                     setupStep = .ready
                     appDelegate.setupStatusBar()
+                    appDelegate.hideMainWindow()
                 } else {
                     setupStep = .prepare
                 }

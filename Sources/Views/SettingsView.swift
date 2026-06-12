@@ -4,10 +4,16 @@ struct SettingsView: View {
     @ObservedObject var appConfig: AppConfig
     var onBack: () -> Void
 
+    @State private var httpPortText = ""
+    @State private var socksPortText = ""
+
     var body: some View {
         ViewLayout(
             headerLeft: {
-                BackButton(title: "Settings") { onBack() }
+                BackButton(title: "Settings") {
+                    commitPorts()
+                    onBack()
+                }
             },
             headerRight: {
                 HeaderButton(icon: "folder", help: "Open Config Folder", action: openFolder)
@@ -17,46 +23,70 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         FormSection("Proxy Server", first: true)
 
-                        FormFieldRow(label: "Test Server") {
-                            Menu {
-                                ForEach(TestServer.allCases, id: \.self) { server in
-                                    Button(server.name) { appConfig.testServer = server.rawValue }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(TestServer(rawValue: appConfig.testServer)?.name ?? "")
-                                    Image(systemName: "chevron.up.chevron.down")
-                                        .font(.system(size: 9))
-                                }
-                                .foregroundColor(.secondary)
-                            }
-                            .menuStyle(.button)
-                            .buttonStyle(.plain)
-                            .menuIndicator(.hidden)
-                            .fixedSize()
-                        }
+                        SelectBox(
+                            TestServer.allCases.map { ($0, $0.name) },
+                            selection: Binding(
+                                get: { TestServer(rawValue: appConfig.testServer) ?? .google },
+                                set: { appConfig.testServer = $0.rawValue }
+                            ),
+                            label: "Test Server"
+                        )
 
                         FormFieldRow(label: "Allow LAN") {
                             Toggle("", isOn: $appConfig.allowLAN)
                                 .labelsHidden()
                         }
 
-                        FormSection("DNS Server")
-
-                        FormField(label: "Primary DNS", icon: "globe") {
-                            TextField("8.8.8.8", text: $appConfig.primaryDNS)
-                                .cardTextField()
+                        FormFieldRow(label: "HTTP Port") {
+                            TextField("\(AppConfig.defaultHTTPPort)", text: $httpPortText)
+                                .rowTextField()
+                                .onSubmit { commitPorts() }
                         }
 
-                        FormField(label: "Secondary DNS", icon: "globe") {
+                        FormFieldRow(label: "SOCKS Port") {
+                            TextField("\(AppConfig.defaultSOCKSPort)", text: $socksPortText)
+                                .rowTextField()
+                                .onSubmit { commitPorts() }
+                        }
+
+                        FormSection("DNS Server")
+
+                        FormFieldRow(label: "Primary DNS") {
+                            TextField("8.8.8.8", text: $appConfig.primaryDNS)
+                                .rowTextField()
+                        }
+
+                        FormFieldRow(label: "Secondary DNS") {
                             TextField("1.1.1.1", text: $appConfig.secondaryDNS)
-                                .cardTextField()
+                                .rowTextField()
                         }
                     }
                     .padding(16)
                 }
+                .onAppear {
+                    httpPortText = String(appConfig.httpPort)
+                    socksPortText = String(appConfig.socksPort)
+                }
             }
         )
+    }
+
+    private func portError(_ text: String) -> String? {
+        text.isEmpty ? nil : Validator.portError(text)
+    }
+
+    private func commitPorts() {
+        if portError(httpPortText) == nil, let port = Int(httpPortText) {
+            appConfig.httpPort = port
+        } else {
+            httpPortText = String(appConfig.httpPort)
+        }
+
+        if portError(socksPortText) == nil, let port = Int(socksPortText) {
+            appConfig.socksPort = port
+        } else {
+            socksPortText = String(appConfig.socksPort)
+        }
     }
 
     private func openFolder() {

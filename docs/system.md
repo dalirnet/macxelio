@@ -32,9 +32,9 @@ To apply DNS system-wide, Macxelio runs a small DNS resolver as a system service
 
 ## Local ports
 
-Macxelio listens locally on these ports:
+Macxelio listens locally on these ports by default — you can change them in [Settings](settings.md):
 
-| Port    | Purpose     |
-| ------- | ----------- |
-| `10802` | HTTP proxy  |
-| `10803` | SOCKS proxy |
+| Port   | Purpose     |
+| ------ | ----------- |
+| `3128` | HTTP proxy  |
+| `1080` | SOCKS proxy |

@@ -7,12 +7,22 @@ struct StatusAvatar: View {
 
     @Environment(\.controlActiveState) private var controlActiveState
     @State private var countdown: CGFloat = 0
+    @State private var resolved: ConnectivityChecker.Status = .unknown
     @State private var fillWork: DispatchWorkItem?
 
     private var windowFocused: Bool { controlActiveState != .inactive }
 
+    private var isChecking: Bool {
+        if case .checking = status { return true }
+        return false
+    }
+
+    private var display: ConnectivityChecker.Status {
+        isChecking ? resolved : status
+    }
+
     private var showsCountdown: Bool {
-        switch status {
+        switch display {
         case .ok, .error: return true
         default: return false
         }
@@ -21,56 +31,63 @@ struct StatusAvatar: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(status.color.opacity(0.125))
+                .fill(display.color.opacity(0.125))
                 .frame(width: 36, height: 36)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .trim(from: 0, to: showsCountdown ? countdown : 0)
-                        .stroke(
-                            status.color.opacity(0.5),
-                            style: StrokeStyle(lineWidth: 1, lineCap: .round)
-                        )
-                        .padding(1)
-                )
+                .overlay {
+                    if isChecking {
+                        LoadingRing(color: display.color)
+                    } else {
+                        RoundedRectangle(cornerRadius: 8)
+                            .trim(from: 0, to: showsCountdown ? countdown : 0)
+                            .stroke(
+                                display.color.opacity(0.5),
+                                style: StrokeStyle(lineWidth: 1, lineCap: .round)
+                            )
+                            .padding(1)
+                    }
+                }
 
             content
         }
+        .onAppear { if !isChecking { resolved = status } }
+        .onChange(of: status) { newValue in
+            if case .checking = newValue {} else { resolved = newValue }
+        }
+        .onChange(of: isChecking) { checking in
+            if checking { stopCountdown() }
+        }
         .onChange(of: checkSequence) { _ in restartCountdown() }
         .onChange(of: windowFocused) { focused in
-            if focused {
-                restartCountdown()
-            } else {
-                fillWork?.cancel()
-                var reset = Transaction()
-                reset.disablesAnimations = true
-                withTransaction(reset) { countdown = 0 }
-            }
+            if focused { restartCountdown() } else { stopCountdown() }
         }
     }
 
     @ViewBuilder
     private var content: some View {
-        switch status {
-        case .checking:
-            ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.8)
+        switch display {
         case .ok:
-            Text(status.latencyText ?? "")
+            Text(display.latencyText ?? "")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(status.color)
+                .foregroundColor(display.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, 3)
         case .error:
             Image(systemName: "exclamationmark.icloud.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(status.color)
-        case .unknown:
+                .foregroundColor(display.color)
+        default:
             Image(systemName: "icloud.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(status.color)
+                .foregroundColor(display.color)
         }
+    }
+
+    private func stopCountdown() {
+        fillWork?.cancel()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { countdown = 0 }
     }
 
     private func restartCountdown() {
@@ -83,5 +100,22 @@ struct StatusAvatar: View {
         }
         fillWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + drain, execute: work)
+    }
+}
+
+private struct LoadingRing: View {
+    let color: Color
+    @State private var trim: CGFloat = 0
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .trim(from: 0, to: trim)
+            .stroke(color.opacity(0.5), style: StrokeStyle(lineWidth: 1, lineCap: .round))
+            .padding(1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    trim = 1
+                }
+            }
     }
 }

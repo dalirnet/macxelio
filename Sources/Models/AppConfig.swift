@@ -3,10 +3,10 @@ import Foundation
 class AppConfig: ObservableObject {
     static let shared = AppConfig()
 
-    static let apiPort = 10800
-    static let testPort = 10801
-    static let httpPort = 10802
-    static let socksPort = 10803
+    static let apiPort = 23400
+    static let testPort = 23450
+    static let defaultHTTPPort = 3128
+    static let defaultSOCKSPort = 1080
 
     private static let dateFormatter = ISO8601DateFormatter()
 
@@ -15,6 +15,8 @@ class AppConfig: ObservableObject {
     private var isLoading = false
 
     @Published var allowLAN: Bool = false { didSet { saveAndNotify() } }
+    @Published var httpPort: Int = AppConfig.defaultHTTPPort { didSet { portsChanged() } }
+    @Published var socksPort: Int = AppConfig.defaultSOCKSPort { didSet { portsChanged() } }
     @Published var testServer: String = TestServer.google.rawValue { didSet { saveAndNotify() } }
     @Published var systemProxyEnabled: Bool = false { didSet { saveAndNotify() } }
     @Published var dnsServerEnabled: Bool = false { didSet { saveAndNotify() } }
@@ -47,6 +49,13 @@ class AppConfig: ObservableObject {
         guard !isLoading else { return }
         if save() {
             NotificationCenter.default.post(name: .configDidChange, object: nil)
+        }
+    }
+
+    private func portsChanged() {
+        saveAndNotify()
+        if !isLoading && systemProxyEnabled {
+            SystemProxy.apply(true)
         }
     }
 
@@ -133,6 +142,8 @@ class AppConfig: ObservableObject {
 
         settingsData["proxies"] = proxies.map { proxyToDict($0) }
         settingsData["rules"] = rules.map { ruleToDict($0) }
+        settingsData["httpPort"] = httpPort
+        settingsData["socksPort"] = socksPort
         settingsData["primaryDNS"] = primaryDNS
         settingsData["secondaryDNS"] = secondaryDNS
         settingsData["testServer"] = testServer
@@ -168,6 +179,8 @@ class AppConfig: ObservableObject {
         guard let settings = loadSettings() else { return }
 
         if let lan = settings["allowLAN"] as? Bool { allowLAN = lan }
+        if let port = settings["httpPort"] as? Int { httpPort = port }
+        if let port = settings["socksPort"] as? Int { socksPort = port }
         if let server = settings["testServer"] as? String, TestServer(rawValue: server) != nil {
             testServer = server
         }
@@ -202,7 +215,7 @@ class AppConfig: ObservableObject {
         let inbounds: [[String: Any]] = [
             [
                 "tag": "socks-inbound",
-                "port": AppConfig.socksPort,
+                "port": socksPort,
                 "listen": listen,
                 "protocol": "socks",
                 "settings": [
@@ -217,7 +230,7 @@ class AppConfig: ObservableObject {
             ],
             [
                 "tag": "http-inbound",
-                "port": AppConfig.httpPort,
+                "port": httpPort,
                 "listen": listen,
                 "protocol": "http",
                 "settings": [:],
