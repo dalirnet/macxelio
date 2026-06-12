@@ -41,13 +41,15 @@ class ConnectivityChecker: ObservableObject {
     @Published private(set) var nextInterval: Double = 0
     @Published private(set) var checkSequence: Int = 0
 
-    private let timeout: TimeInterval = 5
+    private let timeout: TimeInterval = 3
+    private let debounceDelay = 0.3
     private let baseInterval = 5.0
     private let stepInterval = 2.5
     private let maxInterval = 60.0
 
     private var task: Task<Void, Never>?
     private var consecutiveOK = 0
+    private var session: URLSession?
 
     func start() {
         restart()
@@ -55,6 +57,8 @@ class ConnectivityChecker: ObservableObject {
 
     func check() {
         consecutiveOK = 0
+        session?.invalidateAndCancel()
+        session = nil
         restart()
     }
 
@@ -69,7 +73,7 @@ class ConnectivityChecker: ObservableObject {
     }
 
     private func loop() async {
-        try? await pause(1)
+        try? await pause(debounceDelay)
 
         while !Task.isCancelled {
             await performCheck()
@@ -96,9 +100,10 @@ class ConnectivityChecker: ObservableObject {
             return
         }
 
-        if let latency = await Self.measure(
-            url: url, inboundPort: AppConfig.testPort, timeout: timeout)
-        {
+        let session = session ?? Self.makeSession(inboundPort: AppConfig.testPort, timeout: timeout)
+        self.session = session
+
+        if let latency = await Self.measure(url: url, session: session) {
             status = .ok(latency: latency)
             consecutiveOK += 1
         } else {
@@ -107,9 +112,9 @@ class ConnectivityChecker: ObservableObject {
         }
     }
 
-    nonisolated private static func measure(
-        url: URL, inboundPort: Int, timeout: TimeInterval
-    ) async -> Int? {
+    nonisolated private static func makeSession(inboundPort: Int, timeout: TimeInterval)
+        -> URLSession
+    {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = timeout
         config.timeoutIntervalForResource = timeout
@@ -122,8 +127,10 @@ class ConnectivityChecker: ObservableObject {
             kCFNetworkProxiesHTTPSProxy as String: "127.0.0.1",
             kCFNetworkProxiesHTTPSPort as String: inboundPort,
         ]
+        return URLSession(configuration: config)
+    }
 
-        let session = URLSession(configuration: config)
+    nonisolated private static func measure(url: URL, session: URLSession) async -> Int? {
         let start = Date()
         do {
             let (_, response) = try await session.data(from: url)
