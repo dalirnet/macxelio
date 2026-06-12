@@ -5,8 +5,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     var statusItem: NSStatusItem?
     var statusMenu: NSMenu?
     private var statusObserver: AnyCancellable?
-    private var blinkTimer: Timer?
     weak var statusMenuItem: NSMenuItem?
+    var lastResolvedStatus: ConnectivityChecker.Status = .unknown
 
     let appConfig = AppConfig.shared
     let xrayCore = XrayCore()
@@ -61,24 +61,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     private func updateStatusAppearance(_ status: ConnectivityChecker.Status) {
         refreshStatusMenuItem(status)
 
-        guard status == .checking else {
-            blinkTimer?.invalidate()
-            blinkTimer = nil
-            if case .ok = status {
-                statusItem?.button?.alphaValue = 1.0
-            } else {
-                statusItem?.button?.alphaValue = 0.5
-            }
-            return
-        }
-        guard blinkTimer == nil else { return }
-        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
-            guard let button = self?.statusItem?.button else { return }
-            let target: CGFloat = button.alphaValue < 1 ? 1.0 : 0.5
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.35
-                button.animator().alphaValue = target
-            }
+        let effective = status == .checking ? lastResolvedStatus : status
+        if case .ok = effective {
+            statusItem?.button?.alphaValue = 1.0
+        } else {
+            statusItem?.button?.alphaValue = 0.5
         }
     }
 

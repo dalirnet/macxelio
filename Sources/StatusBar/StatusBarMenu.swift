@@ -48,15 +48,22 @@ extension AppDelegate {
             item.submenu = proxySubmenu()
         }
         let status = MainActor.assumeIsolated { ConnectivityChecker.shared.status }
-        applyStatus(status, to: item)
+        applyStatus(displayStatus(for: status), to: item)
         statusMenuItem = item
         return item
     }
 
     func refreshStatusMenuItem(_ status: ConnectivityChecker.Status) {
+        if case .checking = status {} else { lastResolvedStatus = status }
         if let item = statusMenuItem {
-            applyStatus(status, to: item)
+            applyStatus(displayStatus(for: status), to: item)
         }
+    }
+
+    private func displayStatus(for status: ConnectivityChecker.Status) -> ConnectivityChecker.Status
+    {
+        if case .checking = status { return lastResolvedStatus }
+        return status
     }
 
     private func applyStatus(_ status: ConnectivityChecker.Status, to item: NSMenuItem) {
@@ -71,6 +78,8 @@ extension AppDelegate {
 
     private func proxySubmenu() -> NSMenu {
         let submenu = NSMenu()
+        submenu.addItem(checkMenuItem())
+        submenu.addItem(.separator())
         for proxy in appConfig.proxies {
             let item = NSMenuItem()
             item.title = proxy.name
@@ -81,6 +90,13 @@ extension AppDelegate {
             submenu.addItem(item)
         }
         return submenu
+    }
+
+    private func checkMenuItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        item.view = MenuActionRow(
+            title: "Check Now", target: self, action: #selector(checkConnectivity))
+        return item
     }
 
     private func pageItem(_ page: MenuPage) -> NSMenuItem {
@@ -175,6 +191,10 @@ extension AppDelegate {
 
     @objc func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    @objc func checkConnectivity() {
+        MainActor.assumeIsolated { ConnectivityChecker.shared.check() }
     }
 
     @objc func selectProxy(_ sender: NSMenuItem) {
