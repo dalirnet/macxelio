@@ -60,24 +60,32 @@ class ConnectivityChecker: ObservableObject {
         restart()
     }
 
+    private var currentInterval: Double {
+        min(baseInterval + Double(consecutiveOK) * stepInterval, maxInterval)
+    }
+
     private func restart() {
+        // Clear any previous result immediately so a freshly selected proxy
+        // doesn't briefly show the prior one's status.
+        status = AppConfig.shared.selectedProxyId != nil ? .checking : .unknown
         task?.cancel()
         task = Task { [weak self] in await self?.loop() }
     }
 
     private func loop() async {
-        if AppConfig.shared.selectedProxyId != nil { status = .checking }
-
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        try? await sleep(1)
 
         while !Task.isCancelled {
             await performCheck()
 
-            let seconds = min(baseInterval + Double(consecutiveOK) * stepInterval, maxInterval)
-            nextInterval = seconds
+            nextInterval = currentInterval
             checkSequence += 1
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            try? await sleep(currentInterval)
         }
+    }
+
+    private func sleep(_ seconds: Double) async throws {
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
     private func performCheck() async {
