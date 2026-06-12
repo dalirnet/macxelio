@@ -38,10 +38,15 @@ class ConnectivityChecker: ObservableObject {
     }
 
     @Published var status: Status = .unknown
+    /// Seconds until the next check, and a counter that ticks once per completed
+    /// check so views can drive a fresh countdown animation each cycle.
+    @Published private(set) var nextInterval: Double = 0
+    @Published private(set) var checkSequence: Int = 0
 
     private let timeout: TimeInterval = 5
-    private let baseInterval = 5
-    private let maxInterval = 60
+    private let baseInterval = 5.0
+    private let stepInterval = 2.5
+    private let maxInterval = 60.0
 
     private var task: Task<Void, Never>?
     private var consecutiveOK = 0
@@ -68,8 +73,10 @@ class ConnectivityChecker: ObservableObject {
         while !Task.isCancelled {
             await performCheck()
 
-            let seconds = min(baseInterval + consecutiveOK, maxInterval)
-            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            let seconds = min(baseInterval + Double(consecutiveOK) * stepInterval, maxInterval)
+            nextInterval = seconds
+            checkSequence += 1
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         }
     }
 

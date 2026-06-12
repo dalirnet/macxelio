@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     var statusMenu: NSMenu?
     private var statusObserver: AnyCancellable?
     private var blinkTimer: Timer?
+    private weak var menuRow: MenuRow?
 
     let appConfig = AppConfig.shared
     let xrayCore = XrayCore()
@@ -58,6 +59,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
 
     private func updateStatusAppearance(_ status: ConnectivityChecker.Status) {
+        menuRow?.updateBadge(MenuIcon.latencyBadge(for: status))
+
         guard status == .checking else {
             blinkTimer?.invalidate()
             blinkTimer = nil
@@ -101,17 +104,59 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
 
     private func buildMenu(_ menu: NSMenu) {
-        let openItem = NSMenuItem()
-        openItem.title = "Open Macxelio"
-        openItem.target = self
-        openItem.action = #selector(openMainWindow)
-        menu.addItem(openItem)
+        menu.addItem(openMenuItem())
+        menu.addItem(.separator())
 
-        menu.addItem(NSMenuItem.separator())
+        menu.addItem(
+            parentItem(
+                "Proxy Mode",
+                image: MenuIcon.circle(for: appConfig.proxyMode),
+                submenu: proxyModeSubmenu()))
+        menu.addItem(.separator())
 
-        let modeItem = NSMenuItem()
-        modeItem.title = "Proxy Mode"
-        let modeSubmenu = NSMenu()
+        menu.addItem(
+            parentItem(
+                "System Proxy",
+                image: MenuIcon.circle(filled: appConfig.systemProxyEnabled),
+                submenu: toggleSubmenu(
+                    current: appConfig.systemProxyEnabled, action: #selector(setSystemProxy(_:)))))
+        menu.addItem(
+            parentItem(
+                "System DNS",
+                image: MenuIcon.circle(filled: appConfig.dnsServerEnabled),
+                submenu: toggleSubmenu(
+                    current: appConfig.dnsServerEnabled, action: #selector(setSystemDNS(_:)))))
+        menu.addItem(.separator())
+
+        menu.addItem(quitMenuItem())
+    }
+
+    private func openMenuItem() -> NSMenuItem {
+        let name =
+            appConfig.proxies.first { $0.id == appConfig.selectedProxyId }?.name
+            ?? "Open Macxelio"
+        let status = MainActor.assumeIsolated { ConnectivityChecker.shared.status }
+        let row = MenuRow(
+            title: name, badge: MenuIcon.latencyBadge(for: status),
+            target: self, action: #selector(openMainWindow))
+        menuRow = row
+
+        let item = NSMenuItem()
+        item.title = name
+        item.view = row
+        return item
+    }
+
+    private func parentItem(_ title: String, image: NSImage?, submenu: NSMenu) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.title = title
+        item.image = image
+        item.submenu = submenu
+        return item
+    }
+
+    private func proxyModeSubmenu() -> NSMenu {
+        let submenu = NSMenu()
         for mode in AppConfig.ProxyMode.allCases {
             let item = NSMenuItem()
             item.title = mode.rawValue
@@ -119,52 +164,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
             item.representedObject = mode
             item.target = self
             item.action = #selector(setProxyMode(_:))
-            modeSubmenu.addItem(item)
+            submenu.addItem(item)
         }
-        modeItem.submenu = modeSubmenu
-        menu.addItem(modeItem)
+        return submenu
+    }
 
-        menu.addItem(NSMenuItem.separator())
-
-        let systemProxyItem = NSMenuItem()
-        systemProxyItem.title = "System Proxy"
-        let proxySubmenu = NSMenu()
+    private func toggleSubmenu(current: Bool, action: Selector) -> NSMenu {
+        let submenu = NSMenu()
         for enabled in [true, false] {
             let item = NSMenuItem()
             item.title = enabled ? "Enabled" : "Disabled"
-            item.state = appConfig.systemProxyEnabled == enabled ? .on : .off
+            item.state = current == enabled ? .on : .off
             item.representedObject = enabled
             item.target = self
-            item.action = #selector(setSystemProxy(_:))
-            proxySubmenu.addItem(item)
+            item.action = action
+            submenu.addItem(item)
         }
-        systemProxyItem.submenu = proxySubmenu
-        menu.addItem(systemProxyItem)
+        return submenu
+    }
 
-        let dnsItem = NSMenuItem()
-        dnsItem.title = "System DNS"
-        let dnsSubmenu = NSMenu()
-        for enabled in [true, false] {
-            let item = NSMenuItem()
-            item.title = enabled ? "Enabled" : "Disabled"
-            item.state = appConfig.dnsServerEnabled == enabled ? .on : .off
-            item.representedObject = enabled
-            item.target = self
-            item.action = #selector(setSystemDNS(_:))
-            dnsSubmenu.addItem(item)
-        }
-        dnsItem.submenu = dnsSubmenu
-        menu.addItem(dnsItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let quitItem = NSMenuItem()
-        quitItem.title = "Quit Macxelio"
-        quitItem.target = self
-        quitItem.action = #selector(quitApp)
-        quitItem.keyEquivalent = "q"
-        quitItem.keyEquivalentModifierMask = .command
-        menu.addItem(quitItem)
+    private func quitMenuItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        item.title = "Quit Macxelio"
+        item.target = self
+        item.action = #selector(quitApp)
+        item.keyEquivalent = "q"
+        item.keyEquivalentModifierMask = .command
+        return item
     }
 
     @objc func setProxyMode(_ sender: NSMenuItem) {

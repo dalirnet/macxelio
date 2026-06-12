@@ -120,6 +120,10 @@ struct MainView: View {
                             isSelected: appConfig.selectedProxyId == proxy.id,
                             status: appConfig.selectedProxyId == proxy.id
                                 ? connectivity.status : .unknown,
+                            checkInterval: appConfig.selectedProxyId == proxy.id
+                                ? connectivity.nextInterval : 0,
+                            checkSequence: appConfig.selectedProxyId == proxy.id
+                                ? connectivity.checkSequence : 0,
                             xrayRunning: xrayCore.isRunning,
                             isRestarting: xrayCore.isRestarting,
                             onSelect: {
@@ -143,6 +147,8 @@ struct ProxyRow: View {
     let proxy: Proxy
     let isSelected: Bool
     let status: ConnectivityChecker.Status
+    var checkInterval: Double = 0
+    var checkSequence: Int = 0
     var xrayRunning: Bool = true
     var isRestarting: Bool = false
     let onSelect: () -> Void
@@ -152,7 +158,8 @@ struct ProxyRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            statusAvatar
+            StatusAvatar(
+                status: status, checkInterval: checkInterval, checkSequence: checkSequence)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(proxy.name)
@@ -203,36 +210,6 @@ struct ProxyRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect()
-        }
-    }
-
-    private var statusAvatar: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(status.color.opacity(0.125))
-                .frame(width: 36, height: 36)
-
-            switch status {
-            case .checking:
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.8)
-            case .ok:
-                Text(status.latencyText ?? "")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(status.color)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 3)
-            case .error:
-                Image(systemName: "exclamationmark.icloud.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(status.color)
-            case .unknown:
-                Image(systemName: "icloud.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(status.color)
-            }
         }
     }
 }
