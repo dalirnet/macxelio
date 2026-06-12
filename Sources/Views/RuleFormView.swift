@@ -35,26 +35,24 @@ struct RuleFormView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         FormSection("Match", first: true)
 
-                        FormField(label: "Type", icon: "line.3.horizontal.decrease.circle") {
-                            SelectBox(
-                                Rule.RuleType.allCases.map { ($0, $0.rawValue) },
-                                selection: $type
-                            )
-                        }
+                        SelectBox(
+                            Rule.RuleType.allCases.map { ($0, $0.rawValue) },
+                            selection: $type,
+                            label: "Type"
+                        )
 
-                        FormField(label: "Pattern", icon: "textformat", error: patternError) {
+                        FormFieldRow(label: "Pattern", error: patternError) {
                             TextField(patternPlaceholder, text: $pattern)
-                                .cardTextField()
+                                .rowTextField()
                         }
 
                         FormSection("Then")
 
-                        FormField(label: "Action", icon: "arrow.triangle.branch") {
-                            SelectBox(
-                                Rule.RuleAction.allCases.map { ($0, $0.rawValue) },
-                                selection: $action
-                            )
-                        }
+                        SelectBox(
+                            Rule.RuleAction.allCases.map { ($0, $0.rawValue) },
+                            selection: $action,
+                            label: "Action"
+                        )
                     }
                     .padding(16)
                 }

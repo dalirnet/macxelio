@@ -21,8 +21,7 @@ struct EnvironmentsView: View {
                                 $0.category == category
                             }
                             if !environments.isEmpty {
-                                FormSection(
-                                    category.rawValue, icon: category.icon, first: index == 0)
+                                FormSection(category.rawValue, first: index == 0)
 
                                 ForEach(environments) { environment in
                                     EnvironmentRow(
@@ -50,25 +49,20 @@ struct EnvironmentRow: View {
     let onToggle: (Bool) -> Void
 
     var body: some View {
-        StyledRow {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(environment.name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isAvailable ? .primary : .secondary)
+        HStack(spacing: 8) {
+            Text(environment.name)
+                .font(.system(size: 13))
+                .foregroundColor(isAvailable ? .primary : .secondary)
 
-                    Text(isAvailable ? environment.detail : "Not installed")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
+            Spacer()
 
-                Spacer()
-
-                Toggle("", isOn: Binding(get: { isOn }, set: { onToggle($0) }))
-                    .labelsHidden()
-                    .disabled(!isAvailable)
-            }
+            Toggle("", isOn: Binding(get: { isOn }, set: { onToggle($0) }))
+                .labelsHidden()
+                .disabled(!isAvailable)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(8)
     }
 }

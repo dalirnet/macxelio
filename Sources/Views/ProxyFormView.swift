@@ -22,6 +22,13 @@ struct ProxyFormView: View {
 
     var isEditing: Bool { editingProxy != nil }
 
+    private var authOptional: Bool {
+        switch type {
+        case .socks, .http: return true
+        default: return false
+        }
+    }
+
     private var addressError: String? {
         address.isEmpty ? nil : Validator.hostError(address)
     }
@@ -68,31 +75,30 @@ struct ProxyFormView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         FormSection("General", first: true)
 
-                        FormField(label: "Name", icon: "tag") {
+                        FormFieldRow(label: "Name") {
                             TextField("My Server", text: $name)
-                                .cardTextField()
+                                .rowTextField()
                         }
 
-                        FormField(label: "Type", icon: "bolt") {
-                            SelectBox(
-                                Proxy.ProxyType.allCases.map { ($0, $0.rawValue) },
-                                selection: $type
-                            )
-                        }
+                        SelectBox(
+                            Proxy.ProxyType.allCases.map { ($0, $0.rawValue) },
+                            selection: $type,
+                            label: "Type"
+                        )
 
                         FormSection("Server")
 
-                        FormField(label: "Address", icon: "globe", error: addressError) {
+                        FormFieldRow(label: "Address", error: addressError) {
                             TextField("example.com", text: $address)
-                                .cardTextField()
+                                .rowTextField()
                         }
 
-                        FormField(label: "Port", icon: "number", error: portError) {
+                        FormFieldRow(label: "Port", error: portError) {
                             TextField("443", text: $port)
-                                .cardTextField()
+                                .rowTextField()
                         }
 
-                        FormSection("Authentication")
+                        FormSection(authOptional ? "Authentication (Optional)" : "Authentication")
 
                         dynamicFields
                     }
@@ -118,36 +124,38 @@ struct ProxyFormView: View {
     private var dynamicFields: some View {
         switch type {
         case .vless, .vmess:
-            FormField(label: "UUID", icon: "key", error: uuidError) {
+            FormFieldRow(label: "UUID", error: uuidError) {
                 TextField("00000000-0000-0000-0000-000000000000", text: $uuid)
-                    .cardTextField()
+                    .rowTextField()
             }
 
         case .trojan:
-            FormField(label: "Password", icon: "lock") {
-                PasswordField(placeholder: "Password", text: $password)
+            FormFieldRow(label: "Password") {
+                TextField("Password", text: $password)
+                    .rowTextField()
             }
 
         case .shadowsocks:
-            FormField(label: "Password", icon: "lock") {
-                PasswordField(placeholder: "Password", text: $password)
+            FormFieldRow(label: "Password") {
+                TextField("Password", text: $password)
+                    .rowTextField()
             }
 
-            FormField(label: "Method", icon: "lock.shield") {
-                SelectBox(
-                    shadowsocksMethods.map { ($0, $0) },
-                    selection: $method
-                )
-            }
+            SelectBox(
+                shadowsocksMethods.map { ($0, $0) },
+                selection: $method,
+                label: "Method"
+            )
 
         case .socks, .http:
-            FormField(label: "Username (Optional)", icon: "person") {
+            FormFieldRow(label: "Username") {
                 TextField("Username", text: $username)
-                    .cardTextField()
+                    .rowTextField()
             }
 
-            FormField(label: "Password (Optional)", icon: "lock") {
-                PasswordField(placeholder: "Password", text: $password)
+            FormFieldRow(label: "Password") {
+                TextField("Password", text: $password)
+                    .rowTextField()
             }
         }
     }

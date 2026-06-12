@@ -35,14 +35,14 @@ struct HostFormView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         FormSection("Mapping", first: true)
 
-                        FormField(label: "Domain", icon: "globe", error: domainError) {
+                        FormFieldRow(label: "Domain", error: domainError) {
                             TextField("example.com", text: $domain)
-                                .cardTextField()
+                                .rowTextField()
                         }
 
-                        FormField(label: "Address", icon: "number", error: addressError) {
+                        FormFieldRow(label: "Address", error: addressError) {
                             TextField("178.22.122.100", text: $address)
-                                .cardTextField()
+                                .rowTextField()
                         }
                     }
                     .padding(16)

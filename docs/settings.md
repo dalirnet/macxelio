@@ -6,6 +6,10 @@ Open settings with **⌘,** or from the menu bar.
 
 - **Test Server** — the endpoint used for connectivity checks. Pick the one that best reflects what you care about reaching.
 - **Allow LAN** — let other devices on your local network use Macxelio's proxy.
+- **HTTP Port** — the local port for the HTTP/HTTPS proxy (default `3128`).
+- **SOCKS Port** — the local port for the SOCKS proxy (default `1080`).
+
+Changing a port restarts the local proxy automatically; if [System Proxy](system.md) is on, it's re-applied to the new port.
 
 ## DNS Server
 

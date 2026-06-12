@@ -30,7 +30,7 @@ Eventually I built my own. Macxelio isn't trying to be the most powerful client 
 - **Routing rules** — decide what goes where by Domain, IP, GeoIP, or GeoSite, with Proxy / Direct / Block actions.
 - **Hosts & DNS** — custom host mappings and DNS servers, with optional system-wide DNS.
 - **Dev environments** — set up proxy settings for your tools too (npm, pip, cargo, git, docker, shell, and more).
-- **Live status** — checks your connection on a timer and shows a clear status on the active proxy.
+- **Live status** — checks your connection on a timer and shows a clear status on the active proxy, with an instant recheck on demand from the menu or status badge.
 - **Connections** — see what's connected and how it's being routed.
 
 ## Requirements

@@ -7,21 +7,10 @@ struct ProxyEnvironment: Identifiable {
         case downloader = "Downloaders"
         case container = "Containers"
         case shell = "Shell Environment"
-
-        var icon: String {
-            switch self {
-            case .packageManager: return "shippingbox"
-            case .versionControl: return "arrow.triangle.branch"
-            case .downloader: return "arrow.down.circle"
-            case .container: return "square.stack.3d.up"
-            case .shell: return "terminal"
-            }
-        }
     }
 
     let id: String
     let name: String
-    let detail: String
     let category: Category
     let commands: [String]
     let configPath: String
@@ -39,60 +28,60 @@ class EnvironmentService: ObservableObject {
 
     let environments: [ProxyEnvironment] = [
         ProxyEnvironment(
-            id: "npm", name: "npm / pnpm / yarn", detail: "~/.npmrc",
+            id: "npm", name: "npm / pnpm / yarn",
             category: .packageManager, commands: ["npm", "pnpm", "yarn"],
             configPath: "~/.npmrc",
             body: { url in "proxy=\(url)\nhttps-proxy=\(url)" }
         ),
         ProxyEnvironment(
-            id: "pip", name: "pip", detail: "~/.config/pip/pip.conf",
+            id: "pip", name: "pip",
             category: .packageManager, commands: ["pip", "pip3"],
             configPath: "~/.config/pip/pip.conf",
             body: { url in "[global]\nproxy = \(url)" }
         ),
         ProxyEnvironment(
-            id: "conda", name: "conda", detail: "~/.condarc",
+            id: "conda", name: "conda",
             category: .packageManager, commands: ["conda"],
             configPath: "~/.condarc",
             body: { url in "proxy_servers:\n  http: \(url)\n  https: \(url)" }
         ),
         ProxyEnvironment(
-            id: "cargo", name: "cargo", detail: "~/.cargo/config.toml",
+            id: "cargo", name: "cargo",
             category: .packageManager, commands: ["cargo"],
             configPath: "~/.cargo/config.toml",
             body: { url in "[http]\nproxy = \"\(url)\"" }
         ),
         ProxyEnvironment(
-            id: "gem", name: "gem", detail: "~/.gemrc",
+            id: "gem", name: "gem",
             category: .packageManager, commands: ["gem"],
             configPath: "~/.gemrc",
             body: { url in "http_proxy: \(url)" }
         ),
         ProxyEnvironment(
-            id: "git", name: "git", detail: "~/.gitconfig",
+            id: "git", name: "git",
             category: .versionControl, commands: ["git"],
             configPath: "~/.gitconfig",
             body: { url in "[http]\n\tproxy = \(url)" }
         ),
         ProxyEnvironment(
-            id: "curl", name: "curl", detail: "~/.curlrc",
+            id: "curl", name: "curl",
             category: .downloader, commands: ["curl"],
             configPath: "~/.curlrc",
             body: { url in "proxy = \"\(url)\"" }
         ),
         ProxyEnvironment(
-            id: "wget", name: "wget", detail: "~/.wgetrc",
+            id: "wget", name: "wget",
             category: .downloader, commands: ["wget"],
             configPath: "~/.wgetrc",
             body: { url in "http_proxy = \(url)\nhttps_proxy = \(url)\nuse_proxy = on" }
         ),
         ProxyEnvironment(
-            id: "docker", name: "docker", detail: "~/.docker/config.json",
+            id: "docker", name: "docker",
             category: .container, commands: ["docker"],
             configPath: "", body: nil
         ),
         ProxyEnvironment(
-            id: "shell", name: "Shell env", detail: "~/.zshrc",
+            id: "shell", name: "Shell env",
             category: .shell, commands: [],
             configPath: "~/.zshrc",
             body: { url in
@@ -109,7 +98,7 @@ class EnvironmentService: ObservableObject {
     ]
 
     private var proxyURL: String {
-        "http://127.0.0.1:\(AppConfig.httpPort)"
+        "http://127.0.0.1:\(AppConfig.shared.httpPort)"
     }
 
     func refresh() {
