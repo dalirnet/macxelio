@@ -13,14 +13,12 @@ struct FlameIconView: View {
 }
 
 struct FlameIcon {
-    /// Creates the MDI fire icon path scaled to the given size
     static func createPath(size: CGFloat, offsetX: CGFloat = 0, offsetY: CGFloat = 0)
         -> NSBezierPath
     {
         let scale = size / 24.0
         let flamePath = NSBezierPath()
 
-        // MDI fire path (flipped Y for macOS coordinates)
         flamePath.move(to: NSPoint(x: 17.66 * scale + offsetX, y: (24 - 11.2) * scale + offsetY))
         flamePath.curve(
             to: NSPoint(x: 16.89 * scale + offsetX, y: (24 - 10.38) * scale + offsetY),
@@ -92,7 +90,6 @@ struct FlameIcon {
             controlPoint1: NSPoint(x: 18.22 * scale + offsetX, y: (24 - 12) * scale + offsetY),
             controlPoint2: NSPoint(x: 17.66 * scale + offsetX, y: (24 - 11.2) * scale + offsetY))
 
-        // Inner flame
         flamePath.move(to: NSPoint(x: 14.5 * scale + offsetX, y: (24 - 17.5) * scale + offsetY))
         flamePath.curve(
             to: NSPoint(x: 13.4 * scale + offsetX, y: (24 - 18.1) * scale + offsetY),
@@ -135,7 +132,6 @@ struct FlameIcon {
         return flamePath
     }
 
-    /// Creates a menu bar icon image with the flame symbol
     static func createMenuBarImage(size: CGFloat) -> NSImage {
         let image = NSImage(size: NSSize(width: size, height: size))
 
@@ -147,6 +143,28 @@ struct FlameIcon {
 
         image.unlockFocus()
 
+        return image
+    }
+
+    static func createImage(size: CGFloat, color: NSColor) -> NSImage {
+        let path = createPath(size: 24)
+        let inset = size * 0.14
+        let target = size - inset * 2
+        let original = path.bounds
+        let scale = min(target / original.width, target / original.height)
+
+        path.transform(using: AffineTransform(scaleByX: scale, byY: scale))
+        let scaled = path.bounds
+        path.transform(
+            using: AffineTransform(
+                translationByX: (size - scaled.width) / 2 - scaled.minX,
+                byY: (size - scaled.height) / 2 - scaled.minY))
+
+        let image = NSImage(size: NSSize(width: size, height: size))
+        image.lockFocus()
+        color.setFill()
+        path.fill()
+        image.unlockFocus()
         return image
     }
 }
