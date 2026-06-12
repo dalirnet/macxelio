@@ -1,6 +1,13 @@
 # Macxelio
 
+**Mac** + **X**ray + **I/O**
+
 A native macOS menu bar proxy client, powered by Xray-core.
+
+[![Latest Release](https://img.shields.io/github/v/release/dalirnet/macxelio?label=download)](https://github.com/dalirnet/macxelio/releases/latest)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black.svg)
+![Swift](https://img.shields.io/badge/Swift-native-orange.svg)
 
 Built to be lean and efficient — not packed with features you'll never use. It lives in your menu bar, does its job, and stays out of the way. No accounts, no telemetry, no clutter.
 
@@ -28,7 +35,13 @@ Eventually I built my own. Macxelio isn't trying to be the most powerful client 
 
 Macxelio runs on macOS 13.0 or later. It downloads the Xray-core it needs on first launch — there's nothing else to install.
 
-## Build
+## Download
+
+[**Download the latest release**](https://github.com/dalirnet/macxelio/releases/latest), unzip it, and move **Macxelio.app** to your Applications folder.
+
+The app isn't notarized, so the first time you open it: right-click **Macxelio.app** → **Open**, then confirm. If macOS still blocks it, allow it under **System Settings → Privacy & Security**.
+
+## Build from source
 
 ```bash
 make run      # build and launch

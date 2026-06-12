@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Macxelio</title>
+        <meta
+            name="description"
+            content="Native macOS menu bar proxy client powered by Xray-core"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css"
+        />
+        <style>
+            :root {
+                --theme-color: #e8502e;
+            }
+            .app-name img {
+                width: 64px;
+                height: 64px;
+            }
+            .sidebar-nav > ul > li > a {
+                font-weight: 600;
+            }
+            .markdown-section code {
+                border-radius: 4px;
+            }
+            .markdown-section pre {
+                border-radius: 8px;
+            }
+            .markdown-section img {
+                border-radius: 12px;
+            }
+            .markdown-section table {
+                display: table;
+                width: 100%;
+            }
+            .sidebar-toggle {
+                bottom: auto;
+                top: 5px;
+                left: 300px;
+                width: auto;
+                background-color: transparent;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script>
+            window.$docsify = {
+                name: "Macxelio",
+                repo: "https://github.com/dalirnet/macxelio",
+                logo: "/_media/logo.png",
+                autoHeader: true,
+                loadSidebar: true,
+                subMaxLevel: 1,
+                auto2top: true,
+            };
+        </script>
+        <script src="https://cdn.jsdelivr.net/npm/docsify@4"></script>
+    </body>
+</html>

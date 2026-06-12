@@ -147,6 +147,16 @@ struct MacxelioApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
 
+            CommandGroup(replacing: .appInfo) {
+                Button("About Macxelio") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.orderFrontStandardAboutPanel(options: [
+                        .applicationIcon: FlameIcon.createImage(size: 256, color: .systemOrange),
+                        .version: "",
+                    ])
+                }
+            }
+
             CommandGroup(replacing: .appTermination) {
                 Button("Quit Macxelio") {
                     NSApp.terminate(nil)
