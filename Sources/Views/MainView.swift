@@ -109,7 +109,7 @@ struct MainView: View {
             },
             content: {
                 if appConfig.proxies.isEmpty {
-                    EmptyState("No proxies yet", icon: "bolt.horizontal")
+                    EmptyState("No proxies yet", icon: "bolt")
                 } else {
                     StyledList(
                         appConfig.proxies,

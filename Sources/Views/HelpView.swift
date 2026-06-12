@@ -83,7 +83,7 @@ struct HelpView: View {
                             Divider()
                             LegendRow(
                                 icon: "icloud.fill", color: .secondary, title: "Idle",
-                                detail: "No proxy selected")
+                                detail: "No Proxy")
                         }
 
                         FormSection("About")

@@ -16,7 +16,7 @@ struct HostsView: View {
             },
             content: {
                 if appConfig.hosts.isEmpty {
-                    EmptyState("No hosts yet", icon: "doc.plaintext")
+                    EmptyState("No hosts yet", icon: "server.rack")
                 } else {
                     StyledList(
                         appConfig.hosts,

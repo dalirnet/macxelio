@@ -6,7 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     var statusMenu: NSMenu?
     private var statusObserver: AnyCancellable?
     private var blinkTimer: Timer?
-    weak var menuRow: MenuRow?
+    weak var statusMenuItem: NSMenuItem?
 
     let appConfig = AppConfig.shared
     let xrayCore = XrayCore()
@@ -59,7 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
     }
 
     private func updateStatusAppearance(_ status: ConnectivityChecker.Status) {
-        menuRow?.updateBadge(MenuIcon.latencyBadge(for: status))
+        refreshStatusMenuItem(status)
 
         guard status == .checking else {
             blinkTimer?.invalidate()

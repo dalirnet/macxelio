@@ -16,7 +16,7 @@ struct RulesView: View {
             },
             content: {
                 if appConfig.rules.isEmpty {
-                    EmptyState("No rules yet", icon: "list.bullet.rectangle")
+                    EmptyState("No rules yet", icon: "signpost.right.and.left")
                 } else {
                     StyledList(
                         appConfig.rules,

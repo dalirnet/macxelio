@@ -73,7 +73,7 @@ struct ProxyFormView: View {
                                 .cardTextField()
                         }
 
-                        FormField(label: "Type", icon: "bolt.horizontal") {
+                        FormField(label: "Type", icon: "bolt") {
                             SelectBox(
                                 Proxy.ProxyType.allCases.map { ($0, $0.rawValue) },
                                 selection: $type
