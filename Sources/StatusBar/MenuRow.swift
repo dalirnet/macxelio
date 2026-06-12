@@ -1,8 +1,5 @@
 import AppKit
 
-/// Custom status bar menu item showing a left-aligned title with a status badge
-/// floated to the trailing edge. Keeps its requested width minimal so it never
-/// widens the menu; the badge only drifts right when other items make the menu wider.
 final class MenuRow: NSView {
     private weak var target: AnyObject?
     private let action: Selector
@@ -39,7 +36,6 @@ final class MenuRow: NSView {
     func updateBadge(_ badge: NSImage) {
         badgeView.image = badge
         needsLayout = true
-        needsDisplay = true
     }
 
     override func layout() {
@@ -54,28 +50,6 @@ final class MenuRow: NSView {
             y: (bounds.height - badgeSize.height) / 2,
             width: badgeSize.width, height: badgeSize.height)
     }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let highlighted = enclosingMenuItem?.isHighlighted == true
-        if highlighted {
-            NSColor.selectedContentBackgroundColor.setFill()
-            bounds.fill()
-        }
-        label.textColor = highlighted ? .selectedMenuItemTextColor : .labelColor
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(
-            NSTrackingArea(
-                rect: bounds,
-                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-                owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) { needsDisplay = true }
-    override func mouseExited(with event: NSEvent) { needsDisplay = true }
 
     override func mouseUp(with event: NSEvent) {
         guard let item = enclosingMenuItem else { return }

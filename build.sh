@@ -13,12 +13,13 @@ mkdir -p build/Macxelio.app/Contents/{MacOS,Resources}
 
 build_arch() {
     swiftc ${2} -o ${1} \
-        Sources/MacxelioApp.swift \
+        Sources/*.swift \
         Sources/Models/*.swift \
         Sources/Services/*.swift \
         Sources/Components/*.swift \
         Sources/Views/*.swift \
         Sources/Utils/*.swift \
+        Sources/StatusBar/*.swift \
         -framework SwiftUI -framework AppKit -framework Network \
         -target ${3}-apple-macos13.0
 }

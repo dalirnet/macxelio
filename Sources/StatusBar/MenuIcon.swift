@@ -1,8 +1,6 @@
 import AppKit
 
-/// Factory for the small NSImages shown in the status bar menu.
 enum MenuIcon {
-    /// Outlined pill badge showing the current connectivity status / latency.
     static func latencyBadge(for status: ConnectivityChecker.Status) -> NSImage {
         let text: String
         switch status {
@@ -41,22 +39,20 @@ enum MenuIcon {
         return image
     }
 
-    /// Circle indicator for a boolean state: filled when on, outline when off.
     static func circle(filled: Bool) -> NSImage? {
-        circle(symbol: filled ? "circle.fill" : "circle")
+        symbol(filled ? "circle.fill" : "circle")
     }
 
-    /// Circle indicator for the proxy mode: filled (global), half (rule), outline (direct).
     static func circle(for mode: AppConfig.ProxyMode) -> NSImage? {
         switch mode {
-        case .global: return circle(symbol: "circle.fill")
-        case .rule: return circle(symbol: "circle.lefthalf.filled")
-        case .direct: return circle(symbol: "circle")
+        case .global: return symbol("circle.fill")
+        case .rule: return symbol("circle.lefthalf.filled")
+        case .direct: return symbol("circle")
         }
     }
 
-    private static func circle(symbol: String) -> NSImage? {
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+    static func symbol(_ name: String) -> NSImage? {
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
         image?.isTemplate = true
         return image
     }

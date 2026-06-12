@@ -38,8 +38,6 @@ class ConnectivityChecker: ObservableObject {
     }
 
     @Published var status: Status = .unknown
-    /// Seconds until the next check, and a counter that ticks once per completed
-    /// check so views can drive a fresh countdown animation each cycle.
     @Published private(set) var nextInterval: Double = 0
     @Published private(set) var checkSequence: Int = 0
 
@@ -65,26 +63,24 @@ class ConnectivityChecker: ObservableObject {
     }
 
     private func restart() {
-        // Clear any previous result immediately so a freshly selected proxy
-        // doesn't briefly show the prior one's status.
         status = AppConfig.shared.selectedProxyId != nil ? .checking : .unknown
         task?.cancel()
         task = Task { [weak self] in await self?.loop() }
     }
 
     private func loop() async {
-        try? await sleep(1)
+        try? await pause(1)
 
         while !Task.isCancelled {
             await performCheck()
 
             nextInterval = currentInterval
             checkSequence += 1
-            try? await sleep(currentInterval)
+            try? await pause(currentInterval)
         }
     }
 
-    private func sleep(_ seconds: Double) async throws {
+    private func pause(_ seconds: Double) async throws {
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 

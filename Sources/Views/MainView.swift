@@ -70,6 +70,9 @@ struct MainView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: currentScreen)
+        .onReceive(NotificationCenter.default.publisher(for: .openMain)) { _ in
+            navigate(to: .main)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openRules)) { _ in
             navigate(to: .rules)
         }

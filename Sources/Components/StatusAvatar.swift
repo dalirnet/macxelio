@@ -7,6 +7,7 @@ struct StatusAvatar: View {
 
     @Environment(\.controlActiveState) private var controlActiveState
     @State private var countdown: CGFloat = 0
+    @State private var fillWork: DispatchWorkItem?
 
     private var windowFocused: Bool { controlActiveState != .inactive }
 
@@ -39,6 +40,7 @@ struct StatusAvatar: View {
             if focused {
                 restartCountdown()
             } else {
+                fillWork?.cancel()
                 var reset = Transaction()
                 reset.disablesAnimations = true
                 withTransaction(reset) { countdown = 0 }
@@ -71,15 +73,15 @@ struct StatusAvatar: View {
         }
     }
 
-    /// Drains the ring smoothly, then refills it over the interval until the next
-    /// check. Runs only while the window is focused to avoid background animation.
     private func restartCountdown() {
         guard windowFocused, showsCountdown, checkInterval > 0 else { return }
+        fillWork?.cancel()
         let drain = 0.4
         withAnimation(.easeInOut(duration: drain)) { countdown = 0 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + drain) {
-            guard windowFocused else { return }
+        let work = DispatchWorkItem {
             withAnimation(.linear(duration: max(checkInterval - drain, 0.1))) { countdown = 1 }
         }
+        fillWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + drain, execute: work)
     }
 }
