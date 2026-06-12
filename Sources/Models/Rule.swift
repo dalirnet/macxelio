@@ -13,12 +13,11 @@ struct Rule: Identifiable, Codable, Hashable {
         case geoip = "GeoIP"
         case geosite = "GeoSite"
 
-        var abbreviation: String {
+        var prefix: String? {
             switch self {
-            case .domain: return "DOM"
-            case .ip: return "IP"
-            case .geoip: return "GIP"
-            case .geosite: return "GST"
+            case .geoip: return "geoip:"
+            case .geosite: return "geosite:"
+            case .domain, .ip: return nil
             }
         }
     }
@@ -27,23 +26,15 @@ struct Rule: Identifiable, Codable, Hashable {
         case proxy = "Proxy"
         case direct = "Direct"
         case block = "Block"
-
-        var abbreviation: String {
-            switch self {
-            case .proxy: return "PRX"
-            case .direct: return "DIR"
-            case .block: return "BLK"
-            }
-        }
     }
-}
 
-extension Rule {
-    static var example: Rule {
-        Rule(
-            type: .domain,
-            pattern: "google.com",
-            action: .direct
-        )
+    var barePattern: String {
+        guard let prefix = type.prefix, pattern.hasPrefix(prefix) else { return pattern }
+        return String(pattern.dropFirst(prefix.count))
+    }
+
+    var routingPattern: String {
+        guard let prefix = type.prefix else { return pattern }
+        return pattern.hasPrefix(prefix) ? pattern : prefix + pattern
     }
 }

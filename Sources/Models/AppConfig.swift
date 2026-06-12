@@ -1,97 +1,71 @@
 import Foundation
 
-/// Unified configuration manager
-/// All data stored in ~/.config/macxelio/config.json
 class AppConfig: ObservableObject {
     static let shared = AppConfig()
 
-    private let configDir: URL
-    private let configPath: URL
+    static let apiPort = 10800
+    static let testPort = 10801
+    static let httpPort = 10802
+    static let socksPort = 10803
+
+    private static let dateFormatter = ISO8601DateFormatter()
+
+    private let configPath = Tools.url("config.json")
+    private let settingsPath = Tools.url("settings.json")
     private var isLoading = false
 
-    // MARK: - App Settings
-
-    @Published var socksPort: Int = 10808 { didSet { saveAndNotify() } }
-    @Published var httpPort: Int = 10809 { didSet { saveAndNotify() } }
-    @Published var autoConnect: Bool = false { didSet { saveAndNotify() } }
     @Published var allowLAN: Bool = false { didSet { saveAndNotify() } }
+    @Published var testServer: String = TestServer.google.rawValue { didSet { saveAndNotify() } }
     @Published var systemProxyEnabled: Bool = false { didSet { saveAndNotify() } }
     @Published var dnsServerEnabled: Bool = false { didSet { saveAndNotify() } }
     @Published var proxyMode: ProxyMode = .global { didSet { saveAndNotify() } }
-    @Published var selectedConfigId: UUID? { didSet { saveAndNotify() } }
+    @Published var selectedProxyId: UUID? { didSet { saveAndNotify() } }
 
     enum ProxyMode: String, Codable, CaseIterable {
         case global = "Global"
         case rule = "Rule"
         case direct = "Direct"
-
-        var abbreviation: String {
-            switch self {
-            case .global: return "GLB"
-            case .rule: return "RUL"
-            case .direct: return "DIR"
-            }
-        }
     }
 
-    // MARK: - Proxy Configs (outbound servers)
-
-    @Published var configs: [Config] = [] { didSet { saveAndNotify() } }
-
-    // MARK: - Rules
+    @Published var proxies: [Proxy] = [] { didSet { saveAndNotify() } }
 
     @Published var rules: [Rule] = [] { didSet { saveAndNotify() } }
 
-    // MARK: - DNS
+    @Published var primaryDNS: String = "" { didSet { saveAndNotify() } }
+    @Published var secondaryDNS: String = "" { didSet { saveAndNotify() } }
+    @Published var hosts: [Host] = [] { didSet { saveAndNotify() } }
 
-    @Published var dnsServers: [DNSServer] = [] { didSet { saveAndNotify() } }
-    @Published var dnsPolicies: [DNSPolicy] = [] { didSet { saveAndNotify() } }
-
-    // MARK: - Initialization
+    var dnsServerList: [String] {
+        [primaryDNS, secondaryDNS].filter { !$0.isEmpty }
+    }
 
     init() {
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        configDir = homeDir.appendingPathComponent(".config/macxelio")
-        configPath = configDir.appendingPathComponent("config.json")
-
-        // Ensure directory exists
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
-
         load()
     }
 
-    // MARK: - Save and Notify
-
     private func saveAndNotify() {
         guard !isLoading else { return }
-        save()
-        NotificationCenter.default.post(name: .configDidChange, object: nil)
-    }
-
-    // MARK: - Config CRUD
-
-    func addConfig(_ config: Config) {
-        configs.append(config)
-    }
-
-    func updateConfig(_ config: Config) {
-        if let index = configs.firstIndex(where: { $0.id == config.id }) {
-            configs[index] = config
+        if save() {
+            NotificationCenter.default.post(name: .configDidChange, object: nil)
         }
     }
 
-    func deleteConfig(_ config: Config) {
-        configs.removeAll { $0.id == config.id }
-        if selectedConfigId == config.id {
-            selectedConfigId = nil
+    func addProxy(_ proxy: Proxy) {
+        proxies.append(proxy)
+    }
+
+    func updateProxy(_ proxy: Proxy) {
+        if let index = proxies.firstIndex(where: { $0.id == proxy.id }) {
+            proxies[index] = proxy
         }
     }
 
-    func getConfig(by id: UUID) -> Config? {
-        configs.first { $0.id == id }
+    func deleteProxy(_ proxy: Proxy) {
+        proxies.removeAll { $0.id == proxy.id }
+        if selectedProxyId == proxy.id {
+            selectedProxyId = nil
+        }
     }
-
-    // MARK: - Rule CRUD
 
     func addRule(_ rule: Rule) {
         rules.append(rule)
@@ -107,151 +81,128 @@ class AppConfig: ObservableObject {
         rules.removeAll { $0.id == rule.id }
     }
 
-    func clearRules() {
-        rules.removeAll()
+    func addHost(_ host: Host) {
+        hosts.append(host)
     }
 
-    // MARK: - DNS CRUD
-
-    func addDNSServer(_ server: DNSServer) {
-        dnsServers.append(server)
-    }
-
-    func updateDNSServer(_ server: DNSServer) {
-        if let index = dnsServers.firstIndex(where: { $0.id == server.id }) {
-            dnsServers[index] = server
+    func updateHost(_ host: Host) {
+        if let index = hosts.firstIndex(where: { $0.id == host.id }) {
+            hosts[index] = host
         }
     }
 
-    func deleteDNSServer(_ server: DNSServer) {
-        dnsServers.removeAll { $0.id == server.id }
+    func deleteHost(_ host: Host) {
+        hosts.removeAll { $0.id == host.id }
     }
 
-    func addDNSPolicy(_ policy: DNSPolicy) {
-        dnsPolicies.append(policy)
-    }
-
-    func updateDNSPolicy(_ policy: DNSPolicy) {
-        if let index = dnsPolicies.firstIndex(where: { $0.id == policy.id }) {
-            dnsPolicies[index] = policy
-        }
-    }
-
-    func deleteDNSPolicy(_ policy: DNSPolicy) {
-        dnsPolicies.removeAll { $0.id == policy.id }
-    }
-
-    func clearDNS() {
-        dnsServers.removeAll()
-        dnsPolicies.removeAll()
-    }
-
-    // MARK: - Persistence
-
-    func save() {
+    @discardableResult
+    func save() -> Bool {
         var configData: [String: Any] = [:]
 
-        // Standard xray config sections
-        configData["log"] = ["loglevel": "warning"]
+        configData["log"] = [
+            "loglevel": "error",
+            "access": Tools.url("access.log").path,
+            "error": Tools.url("xray.log").path,
+        ]
+        configData["stats"] = [:]
+        configData["api"] = ["tag": "api", "services": ["StatsService"]]
+        configData["policy"] = [
+            "system": [
+                "statsOutboundUplink": true,
+                "statsOutboundDownlink": true,
+            ]
+        ]
         configData["inbounds"] = buildInbounds()
         configData["outbounds"] = buildOutbounds()
+        configData["routing"] = buildRouting()
 
-        if proxyMode == .rule && !rules.isEmpty {
-            configData["routing"] = buildRouting()
+        if dnsServerEnabled {
+            SystemDNS.writeConfig()
         }
 
-        if dnsServerEnabled && (!dnsServers.isEmpty || !dnsPolicies.isEmpty) {
-            configData["dns"] = buildDNS()
-        }
-
-        // Custom macxelio settings
-        var macxelioSettings: [String: Any] = [
-            "socksPort": socksPort,
-            "httpPort": httpPort,
-            "autoConnect": autoConnect,
+        var settingsData: [String: Any] = [
             "allowLAN": allowLAN,
             "systemProxyEnabled": systemProxyEnabled,
             "dnsServerEnabled": dnsServerEnabled,
             "proxyMode": proxyMode.rawValue,
         ]
 
-        if let selectedId = selectedConfigId {
-            macxelioSettings["selectedConfigId"] = selectedId.uuidString
+        if let selectedId = selectedProxyId {
+            settingsData["selectedProxyId"] = selectedId.uuidString
         }
 
-        macxelioSettings["configs"] = configs.map { configToDict($0) }
-        macxelioSettings["rules"] = rules.map { ruleToDict($0) }
-        macxelioSettings["dnsServers"] = dnsServers.map { dnsServerToDict($0) }
-        macxelioSettings["dnsPolicies"] = dnsPolicies.map { dnsPolicyToDict($0) }
+        settingsData["proxies"] = proxies.map { proxyToDict($0) }
+        settingsData["rules"] = rules.map { ruleToDict($0) }
+        settingsData["primaryDNS"] = primaryDNS
+        settingsData["secondaryDNS"] = secondaryDNS
+        settingsData["testServer"] = testServer
+        settingsData["hosts"] = hosts.map { hostToDict($0) }
 
-        configData["_macxelio"] = macxelioSettings
+        let configChanged = writeJSONIfChanged(configData, to: configPath)
+        writeJSONIfChanged(settingsData, to: settingsPath)
+        return configChanged
+    }
 
-        if let jsonData = try? JSONSerialization.data(
-            withJSONObject: configData, options: [.prettyPrinted, .sortedKeys])
-        {
-            try? jsonData.write(to: configPath)
-        }
+    @discardableResult
+    private func writeJSONIfChanged(_ object: [String: Any], to url: URL) -> Bool {
+        guard
+            let data = try? JSONSerialization.data(
+                withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+        else { return false }
+        if (try? Data(contentsOf: url)) == data { return false }
+        try? data.write(to: url)
+        return true
+    }
+
+    private func loadSettings() -> [String: Any]? {
+        guard let data = try? Data(contentsOf: settingsPath),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return json
     }
 
     func load() {
         isLoading = true
         defer { isLoading = false }
 
-        guard FileManager.default.fileExists(atPath: configPath.path),
-            let data = try? Data(contentsOf: configPath),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let macxelio = json["_macxelio"] as? [String: Any]
-        else {
-            return
-        }
+        guard let settings = loadSettings() else { return }
 
-        if let port = macxelio["socksPort"] as? Int { socksPort = port }
-        if let port = macxelio["httpPort"] as? Int { httpPort = port }
-        if let auto = macxelio["autoConnect"] as? Bool { autoConnect = auto }
-        if let lan = macxelio["allowLAN"] as? Bool { allowLAN = lan }
-        if let system = macxelio["systemProxyEnabled"] as? Bool { systemProxyEnabled = system }
-        if let dns = macxelio["dnsServerEnabled"] as? Bool { dnsServerEnabled = dns }
-        if let modeStr = macxelio["proxyMode"] as? String, let mode = ProxyMode(rawValue: modeStr) {
+        if let lan = settings["allowLAN"] as? Bool { allowLAN = lan }
+        if let server = settings["testServer"] as? String, TestServer(rawValue: server) != nil {
+            testServer = server
+        }
+        if let system = settings["systemProxyEnabled"] as? Bool { systemProxyEnabled = system }
+        if let dns = settings["dnsServerEnabled"] as? Bool { dnsServerEnabled = dns }
+        if let modeStr = settings["proxyMode"] as? String, let mode = ProxyMode(rawValue: modeStr) {
             proxyMode = mode
         }
-        if let idStr = macxelio["selectedConfigId"] as? String {
-            selectedConfigId = UUID(uuidString: idStr)
+        if let idStr = settings["selectedProxyId"] as? String {
+            selectedProxyId = UUID(uuidString: idStr)
         }
 
-        if let configsData = macxelio["configs"] as? [[String: Any]] {
-            configs = configsData.compactMap { dictToConfig($0) }
+        if let proxiesData = settings["proxies"] as? [[String: Any]] {
+            proxies = proxiesData.compactMap { dictToProxy($0) }
         }
 
-        if let rulesData = macxelio["rules"] as? [[String: Any]] {
+        if let rulesData = settings["rules"] as? [[String: Any]] {
             rules = rulesData.compactMap { dictToRule($0) }
         }
 
-        if let serversData = macxelio["dnsServers"] as? [[String: Any]] {
-            dnsServers = serversData.compactMap { dictToDNSServer($0) }
+        if let primary = settings["primaryDNS"] as? String { primaryDNS = primary }
+        if let secondary = settings["secondaryDNS"] as? String { secondaryDNS = secondary }
+
+        if let hostsData = settings["hosts"] as? [[String: Any]] {
+            hosts = hostsData.compactMap { dictToHost($0) }
         }
-
-        if let policiesData = macxelio["dnsPolicies"] as? [[String: Any]] {
-            dnsPolicies = policiesData.compactMap { dictToDNSPolicy($0) }
-        }
     }
-
-    func getConfigPath() -> String {
-        configPath.path
-    }
-
-    func getConfigDir() -> URL {
-        configDir
-    }
-
-    // MARK: - Xray Config Building
 
     private func buildInbounds() -> [[String: Any]] {
         let listen = allowLAN ? "0.0.0.0" : "127.0.0.1"
 
-        return [
+        let inbounds: [[String: Any]] = [
             [
                 "tag": "socks-inbound",
-                "port": socksPort,
+                "port": AppConfig.socksPort,
                 "listen": listen,
                 "protocol": "socks",
                 "settings": [
@@ -266,21 +217,37 @@ class AppConfig: ObservableObject {
             ],
             [
                 "tag": "http-inbound",
-                "port": httpPort,
+                "port": AppConfig.httpPort,
                 "listen": listen,
                 "protocol": "http",
                 "settings": [:],
             ],
+            [
+                "tag": "api",
+                "port": AppConfig.apiPort,
+                "listen": "127.0.0.1",
+                "protocol": "dokodemo-door",
+                "settings": ["address": "127.0.0.1"],
+            ],
+            [
+                "tag": "test",
+                "port": AppConfig.testPort,
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": [:],
+            ],
         ]
+
+        return inbounds
     }
 
     private func buildOutbounds() -> [[String: Any]] {
         var outbounds: [[String: Any]] = []
 
-        if let selectedId = selectedConfigId,
-            let config = configs.first(where: { $0.id == selectedId })
+        if let selectedId = selectedProxyId,
+            let proxy = proxies.first(where: { $0.id == selectedId })
         {
-            outbounds.append(buildProxyOutbound(config: config))
+            outbounds.append(buildProxyOutbound(proxy: proxy))
         }
 
         outbounds.append([
@@ -297,24 +264,23 @@ class AppConfig: ObservableObject {
         return outbounds
     }
 
-    private func buildProxyOutbound(config: Config) -> [String: Any] {
+    private func buildProxyOutbound(proxy: Proxy) -> [String: Any] {
         var proxyOutbound: [String: Any] = [
             "tag": "proxy",
-            "protocol": config.type.rawValue.lowercased(),
+            "protocol": proxy.type.rawValue.lowercased(),
         ]
 
         var serverSettings: [String: Any] = [:]
-        let streamSettings: [String: Any] = [:]
 
-        switch config.type {
+        switch proxy.type {
         case .vless:
             serverSettings["vnext"] = [
                 [
-                    "address": config.address,
-                    "port": config.port,
+                    "address": proxy.address,
+                    "port": proxy.port,
                     "users": [
                         [
-                            "id": config.uuid ?? "",
+                            "id": proxy.uuid ?? "",
                             "encryption": "none",
                         ]
                     ],
@@ -323,11 +289,11 @@ class AppConfig: ObservableObject {
         case .vmess:
             serverSettings["vnext"] = [
                 [
-                    "address": config.address,
-                    "port": config.port,
+                    "address": proxy.address,
+                    "port": proxy.port,
                     "users": [
                         [
-                            "id": config.uuid ?? "",
+                            "id": proxy.uuid ?? "",
                             "alterId": 0,
                             "security": "auto",
                         ]
@@ -337,27 +303,27 @@ class AppConfig: ObservableObject {
         case .trojan:
             serverSettings["servers"] = [
                 [
-                    "address": config.address,
-                    "port": config.port,
-                    "password": config.password ?? "",
+                    "address": proxy.address,
+                    "port": proxy.port,
+                    "password": proxy.password ?? "",
                 ]
             ]
         case .shadowsocks:
             serverSettings["servers"] = [
                 [
-                    "address": config.address,
-                    "port": config.port,
-                    "method": config.method ?? "aes-256-gcm",
-                    "password": config.password ?? "",
+                    "address": proxy.address,
+                    "port": proxy.port,
+                    "method": proxy.method ?? "aes-256-gcm",
+                    "password": proxy.password ?? "",
                 ]
             ]
         case .socks:
             var server: [String: Any] = [
-                "address": config.address,
-                "port": config.port,
+                "address": proxy.address,
+                "port": proxy.port,
             ]
-            if let username = config.username, !username.isEmpty,
-                let password = config.password, !password.isEmpty
+            if let username = proxy.username, !username.isEmpty,
+                let password = proxy.password, !password.isEmpty
             {
                 server["users"] = [
                     [
@@ -369,11 +335,11 @@ class AppConfig: ObservableObject {
             serverSettings["servers"] = [server]
         case .http:
             var server: [String: Any] = [
-                "address": config.address,
-                "port": config.port,
+                "address": proxy.address,
+                "port": proxy.port,
             ]
-            if let username = config.username, !username.isEmpty,
-                let password = config.password, !password.isEmpty
+            if let username = proxy.username, !username.isEmpty,
+                let password = proxy.password, !password.isEmpty
             {
                 server["users"] = [
                     [
@@ -386,34 +352,45 @@ class AppConfig: ObservableObject {
         }
 
         proxyOutbound["settings"] = serverSettings
-        if !streamSettings.isEmpty {
-            proxyOutbound["streamSettings"] = streamSettings
-        }
-
         return proxyOutbound
     }
 
     private func buildRouting() -> [String: Any] {
-        var routingRules: [[String: Any]] = []
+        var routingRules: [[String: Any]] = [
+            ["type": "field", "inboundTag": ["api"], "outboundTag": "api"]
+        ]
 
-        for rule in rules {
-            var routingRule: [String: Any] = ["type": "field"]
-
-            switch rule.type {
-            case .domain, .geosite:
-                routingRule["domain"] = [rule.pattern]
-            case .ip, .geoip:
-                routingRule["ip"] = [rule.pattern]
-            }
-
-            switch rule.action {
-            case .proxy: routingRule["outboundTag"] = "proxy"
-            case .direct: routingRule["outboundTag"] = "direct"
-            case .block: routingRule["outboundTag"] = "blocked"
-            }
-
-            routingRules.append(routingRule)
+        if selectedProxyId != nil {
+            routingRules.append([
+                "type": "field", "inboundTag": ["test"], "outboundTag": "proxy",
+            ])
         }
+
+        if proxyMode == .rule {
+            for rule in rules {
+                var routingRule: [String: Any] = ["type": "field"]
+
+                switch rule.type {
+                case .domain, .geosite:
+                    routingRule["domain"] = [rule.routingPattern]
+                case .ip, .geoip:
+                    routingRule["ip"] = [rule.routingPattern]
+                }
+
+                switch rule.action {
+                case .proxy: routingRule["outboundTag"] = "proxy"
+                case .direct: routingRule["outboundTag"] = "direct"
+                case .block: routingRule["outboundTag"] = "blocked"
+                }
+
+                routingRules.append(routingRule)
+            }
+        }
+
+        let defaultTag = (proxyMode != .direct && selectedProxyId != nil) ? "proxy" : "direct"
+        routingRules.append([
+            "type": "field", "network": "tcp,udp", "outboundTag": defaultTag,
+        ])
 
         return [
             "domainStrategy": "IPIfNonMatch",
@@ -421,64 +398,42 @@ class AppConfig: ObservableObject {
         ]
     }
 
-    private func buildDNS() -> [String: Any] {
-        var dnsConfig: [String: Any] = [:]
-
-        if !dnsServers.isEmpty {
-            dnsConfig["servers"] = dnsServers.map { $0.address }
-        }
-
-        if !dnsPolicies.isEmpty {
-            var hosts: [String: String] = [:]
-            for policy in dnsPolicies {
-                hosts[policy.domain] = policy.dnsServer
-            }
-            dnsConfig["hosts"] = hosts
-        }
-
-        return dnsConfig
-    }
-
-    // MARK: - Serialization Helpers
-
-    private func configToDict(_ config: Config) -> [String: Any] {
+    private func proxyToDict(_ proxy: Proxy) -> [String: Any] {
         var dict: [String: Any] = [
-            "id": config.id.uuidString,
-            "name": config.name,
-            "type": config.type.rawValue,
-            "address": config.address,
-            "port": config.port,
-            "createdAt": ISO8601DateFormatter().string(from: config.createdAt),
+            "id": proxy.id.uuidString,
+            "name": proxy.name,
+            "type": proxy.type.rawValue,
+            "address": proxy.address,
+            "port": proxy.port,
+            "createdAt": Self.dateFormatter.string(from: proxy.createdAt),
         ]
-        if let uuid = config.uuid { dict["uuid"] = uuid }
-        if let password = config.password { dict["password"] = password }
-        if let method = config.method { dict["method"] = method }
-        if let username = config.username { dict["username"] = username }
-        if let ping = config.ping { dict["ping"] = ping }
+        if let uuid = proxy.uuid { dict["uuid"] = uuid }
+        if let password = proxy.password { dict["password"] = password }
+        if let method = proxy.method { dict["method"] = method }
+        if let username = proxy.username { dict["username"] = username }
         return dict
     }
 
-    private func dictToConfig(_ dict: [String: Any]) -> Config? {
+    private func dictToProxy(_ dict: [String: Any]) -> Proxy? {
         guard let idStr = dict["id"] as? String, let id = UUID(uuidString: idStr),
             let name = dict["name"] as? String,
-            let typeStr = dict["type"] as? String, let type = Config.ConfigType(rawValue: typeStr),
+            let typeStr = dict["type"] as? String, let type = Proxy.ProxyType(rawValue: typeStr),
             let address = dict["address"] as? String,
             let port = dict["port"] as? Int
         else { return nil }
 
-        var config = Config(name: name, type: type, address: address, port: port)
-        config.id = id
-        config.uuid = dict["uuid"] as? String
-        config.password = dict["password"] as? String
-        config.method = dict["method"] as? String
-        config.username = dict["username"] as? String
-        config.ping = dict["ping"] as? Int
+        var proxy = Proxy(name: name, type: type, address: address, port: port)
+        proxy.id = id
+        proxy.uuid = dict["uuid"] as? String
+        proxy.password = dict["password"] as? String
+        proxy.method = dict["method"] as? String
+        proxy.username = dict["username"] as? String
         if let dateStr = dict["createdAt"] as? String,
-            let date = ISO8601DateFormatter().date(from: dateStr)
+            let date = Self.dateFormatter.date(from: dateStr)
         {
-            config.createdAt = date
+            proxy.createdAt = date
         }
-        return config
+        return proxy
     }
 
     private func ruleToDict(_ rule: Rule) -> [String: Any] {
@@ -487,7 +442,7 @@ class AppConfig: ObservableObject {
             "type": rule.type.rawValue,
             "pattern": rule.pattern,
             "action": rule.action.rawValue,
-            "createdAt": ISO8601DateFormatter().string(from: rule.createdAt),
+            "createdAt": Self.dateFormatter.string(from: rule.createdAt),
         ]
     }
 
@@ -502,59 +457,36 @@ class AppConfig: ObservableObject {
         var rule = Rule(type: type, pattern: pattern, action: action)
         rule.id = id
         if let dateStr = dict["createdAt"] as? String,
-            let date = ISO8601DateFormatter().date(from: dateStr)
+            let date = Self.dateFormatter.date(from: dateStr)
         {
             rule.createdAt = date
         }
         return rule
     }
 
-    private func dnsServerToDict(_ server: DNSServer) -> [String: Any] {
+    private func hostToDict(_ host: Host) -> [String: Any] {
         return [
-            "id": server.id.uuidString,
-            "address": server.address,
-            "createdAt": ISO8601DateFormatter().string(from: server.createdAt),
+            "id": host.id.uuidString,
+            "domain": host.domain,
+            "address": host.address,
+            "createdAt": Self.dateFormatter.string(from: host.createdAt),
         ]
     }
 
-    private func dictToDNSServer(_ dict: [String: Any]) -> DNSServer? {
+    private func dictToHost(_ dict: [String: Any]) -> Host? {
         guard let idStr = dict["id"] as? String, let id = UUID(uuidString: idStr),
+            let domain = dict["domain"] as? String,
             let address = dict["address"] as? String
         else { return nil }
 
-        var server = DNSServer(address: address)
-        server.id = id
+        var host = Host(domain: domain, address: address)
+        host.id = id
         if let dateStr = dict["createdAt"] as? String,
-            let date = ISO8601DateFormatter().date(from: dateStr)
+            let date = Self.dateFormatter.date(from: dateStr)
         {
-            server.createdAt = date
+            host.createdAt = date
         }
-        return server
-    }
-
-    private func dnsPolicyToDict(_ policy: DNSPolicy) -> [String: Any] {
-        return [
-            "id": policy.id.uuidString,
-            "domain": policy.domain,
-            "dnsServer": policy.dnsServer,
-            "createdAt": ISO8601DateFormatter().string(from: policy.createdAt),
-        ]
-    }
-
-    private func dictToDNSPolicy(_ dict: [String: Any]) -> DNSPolicy? {
-        guard let idStr = dict["id"] as? String, let id = UUID(uuidString: idStr),
-            let domain = dict["domain"] as? String,
-            let dnsServer = dict["dnsServer"] as? String
-        else { return nil }
-
-        var policy = DNSPolicy(domain: domain, dnsServer: dnsServer)
-        policy.id = id
-        if let dateStr = dict["createdAt"] as? String,
-            let date = ISO8601DateFormatter().date(from: dateStr)
-        {
-            policy.createdAt = date
-        }
-        return policy
+        return host
     }
 }
 
