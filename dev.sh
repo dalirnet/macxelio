@@ -111,6 +111,8 @@ publish() {
     git push origin "$BRANCH"
 
     git checkout "$MAIN"
+    git fetch origin "$MAIN"
+    git reset --hard "origin/$MAIN"
     git merge "$BRANCH" --ff-only 2>/dev/null || git merge "$BRANCH" --no-edit
     git push origin "$MAIN"
     echo "==> Merged ${BRANCH} → ${MAIN}"
