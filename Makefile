@@ -14,6 +14,7 @@ run: build
 
 .PHONY: format
 format:
+	pnpx prettier -w docs
 	swift-format format -i -r --configuration .swift-format Sources
 
 .PHONY: clean
