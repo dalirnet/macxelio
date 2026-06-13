@@ -28,6 +28,7 @@ struct EnvironmentsView: View {
                                         environment: environment,
                                         isAvailable: service.isAvailable(environment),
                                         isOn: service.enabled.contains(environment.id),
+                                        isChecking: service.checking.contains(environment.id),
                                         onToggle: { service.setEnabled(environment, $0) }
                                     )
                                 }
@@ -46,6 +47,7 @@ struct EnvironmentRow: View {
     let environment: ProxyEnvironment
     let isAvailable: Bool
     let isOn: Bool
+    var isChecking: Bool = false
     let onToggle: (Bool) -> Void
 
     var body: some View {
@@ -56,9 +58,15 @@ struct EnvironmentRow: View {
 
             Spacer()
 
-            Toggle("", isOn: Binding(get: { isOn }, set: { onToggle($0) }))
-                .labelsHidden()
-                .disabled(!isAvailable)
+            if isChecking {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.8)
+            } else {
+                Toggle("", isOn: Binding(get: { isOn }, set: { onToggle($0) }))
+                    .labelsHidden()
+                    .disabled(!isAvailable)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

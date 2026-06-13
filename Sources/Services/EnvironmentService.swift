@@ -8,16 +8,16 @@ struct ProxyEnvironment: Identifiable {
     }
 
     enum Kind {
-        case line((String) -> String)
-        case json(key: String)
+        case line(path: String, body: (String) -> String)
+        case json(path: String, key: String)
         case docker
+        case command(set: (String) -> String, unset: String, check: String)
     }
 
     let id: String
     let name: String
     let category: Category
     let commands: [String]
-    let configPath: String
     let kind: Kind
     var appName: String? = nil
 }
@@ -26,27 +26,15 @@ struct ProxyEnvironment: Identifiable {
 class EnvironmentService: ObservableObject {
     @Published var available: Set<String> = []
     @Published var enabled: Set<String> = []
+    @Published var checking: Set<String> = []
 
     private let dockerConfig = "~/.docker/config.json"
 
     let environments: [ProxyEnvironment] = [
         ProxyEnvironment(
-            id: "git", name: "git",
-            category: .general, commands: ["git"],
-            configPath: "~/.gitconfig",
-            kind: .line { url in "[http]\n\tproxy = \(url)" }
-        ),
-        ProxyEnvironment(
-            id: "docker", name: "docker",
-            category: .general, commands: ["docker"],
-            configPath: "~/.docker/config.json",
-            kind: .docker
-        ),
-        ProxyEnvironment(
             id: "shell", name: "Shell env",
             category: .general, commands: [],
-            configPath: "~/.zshrc",
-            kind: .line { url in
+            kind: .line(path: "~/.zshrc") { url in
                 """
                 export http_proxy=\(url)
                 export https_proxy=\(url)
@@ -58,58 +46,41 @@ class EnvironmentService: ObservableObject {
             }
         ),
         ProxyEnvironment(
+            id: "git", name: "git",
+            category: .general, commands: ["git"],
+            kind: .command(set: Commands.gitSet, unset: Commands.gitUnset, check: Commands.gitCheck)
+        ),
+        ProxyEnvironment(
+            id: "docker", name: "docker",
+            category: .general, commands: ["docker"],
+            kind: .docker
+        ),
+        ProxyEnvironment(
             id: "zed", name: "Zed",
             category: .editor, commands: ["zed"],
-            configPath: "~/.config/zed/settings.json",
-            kind: .json(key: "proxy"), appName: "Zed"
+            kind: .json(path: "~/.config/zed/settings.json", key: "proxy"), appName: "Zed"
         ),
         ProxyEnvironment(
             id: "vscode", name: "VS Code",
             category: .editor, commands: ["code"],
-            configPath: "~/Library/Application Support/Code/User/settings.json",
-            kind: .json(key: "http.proxy"), appName: "Visual Studio Code"
-        ),
-        ProxyEnvironment(
-            id: "cursor", name: "Cursor",
-            category: .editor, commands: ["cursor"],
-            configPath: "~/Library/Application Support/Cursor/User/settings.json",
-            kind: .json(key: "http.proxy"), appName: "Cursor"
+            kind: .json(
+                path: "~/Library/Application Support/Code/User/settings.json", key: "http.proxy"),
+            appName: "Visual Studio Code"
         ),
         ProxyEnvironment(
             id: "npm", name: "npm",
             category: .packageManager, commands: ["npm", "pnpm", "yarn"],
-            configPath: "~/.npmrc",
-            kind: .line { url in "proxy=\(url)\nhttps-proxy=\(url)" }
+            kind: .command(set: Commands.npmSet, unset: Commands.npmUnset, check: Commands.npmCheck)
         ),
         ProxyEnvironment(
             id: "pip", name: "pip",
             category: .packageManager, commands: ["pip", "pip3"],
-            configPath: "~/.config/pip/pip.conf",
-            kind: .line { url in "[global]\nproxy = \(url)" }
-        ),
-        ProxyEnvironment(
-            id: "conda", name: "conda",
-            category: .packageManager, commands: ["conda"],
-            configPath: "~/.condarc",
-            kind: .line { url in "proxy_servers:\n  http: \(url)\n  https: \(url)" }
-        ),
-        ProxyEnvironment(
-            id: "cargo", name: "cargo",
-            category: .packageManager, commands: ["cargo"],
-            configPath: "~/.cargo/config.toml",
-            kind: .line { url in "[http]\nproxy = \"\(url)\"" }
-        ),
-        ProxyEnvironment(
-            id: "gem", name: "gem",
-            category: .packageManager, commands: ["gem"],
-            configPath: "~/.gemrc",
-            kind: .line { url in "http_proxy: \(url)" }
+            kind: .command(set: Commands.pipSet, unset: Commands.pipUnset, check: Commands.pipCheck)
         ),
         ProxyEnvironment(
             id: "go", name: "go",
             category: .packageManager, commands: ["go"],
-            configPath: "~/.config/go/env",
-            kind: .line { url in "http_proxy=\(url)\nhttps_proxy=\(url)" }
+            kind: .line(path: "~/.config/go/env") { url in "http_proxy=\(url)\nhttps_proxy=\(url)" }
         ),
     ]
 
@@ -119,31 +90,50 @@ class EnvironmentService: ObservableObject {
 
     func refresh() {
         var on: Set<String> = []
+        var commandChecks: [(id: String, check: String)] = []
         for environment in environments {
-            let isOn: Bool
             switch environment.kind {
             case .docker:
-                isOn = isDockerEnabled()
-            case .json(let key):
-                isOn = hasJSONLine(environment.configPath, key: key)
-            case .line(let body):
-                isOn = hasConfig(environment.configPath, body: body(proxyURL))
+                if isDockerEnabled() { on.insert(environment.id) }
+            case .command(_, _, let check):
+                commandChecks.append((environment.id, check))
+            case .json(let path, let key):
+                if hasJSONLine(path, key: key) { on.insert(environment.id) }
+            case .line(let path, let body):
+                if hasConfig(path, body: body(proxyURL)) { on.insert(environment.id) }
             }
-            if isOn { on.insert(environment.id) }
         }
+        let commandIDs = Set(commandChecks.map(\.id))
         enabled = on
+        checking = commandIDs
 
         detectAvailable()
+
+        Task.detached { [commandChecks, commandIDs] in
+            var found: Set<String> = []
+            for item in commandChecks
+            where Shell.output("/bin/zsh", ["-lc", item.check]).contains("127.0.0.1") {
+                found.insert(item.id)
+            }
+            let detected = found
+            await MainActor.run {
+                self.enabled.formUnion(detected)
+                self.checking.subtract(commandIDs)
+            }
+        }
     }
 
     func setEnabled(_ environment: ProxyEnvironment, _ on: Bool) {
         switch environment.kind {
         case .docker:
             setDockerProxy(on)
-        case .json(let key):
-            setJSONLine(environment.configPath, key: key, on: on)
-        case .line(let body):
-            setConfig(environment.configPath, body: body(proxyURL), on: on)
+        case .command(let set, let unset, _):
+            let command = on ? set(proxyURL) : unset
+            Task.detached { Shell.run("/bin/zsh", ["-lc", command]) }
+        case .json(let path, let key):
+            setJSONLine(path, key: key, on: on)
+        case .line(let path, let body):
+            setConfig(path, body: body(proxyURL), on: on)
         }
 
         if on { enabled.insert(environment.id) } else { enabled.remove(environment.id) }
@@ -266,4 +256,33 @@ class EnvironmentService: ObservableObject {
         else { return false }
         return def["httpProxy"] != nil
     }
+}
+
+private enum Commands {
+    static func gitSet(_ url: String) -> String {
+        "git config --global --replace-all http.proxy \(url); "
+            + "git config --global --replace-all https.proxy \(url)"
+    }
+    static let gitUnset =
+        "git config --global --unset-all http.proxy; "
+        + "git config --global --unset-all https.proxy"
+    static let gitCheck = "git config --global --get-all http.proxy"
+
+    static let nodeKeys = "proxy http-proxy https-proxy httpProxy httpsProxy"
+    static func npmSet(_ url: String) -> String {
+        "for t in npm pnpm yarn; do command -v $t >/dev/null 2>&1 && "
+            + "for k in \(nodeKeys); do $t config set $k \(url) 2>/dev/null; done; done"
+    }
+    static let npmUnset =
+        "for t in npm pnpm yarn; do command -v $t >/dev/null 2>&1 && "
+        + "for k in \(nodeKeys); do $t config delete $k 2>/dev/null; "
+        + "$t config unset $k 2>/dev/null; done; done"
+    static let npmCheck =
+        "for t in npm pnpm yarn; do $t config get proxy 2>/dev/null; "
+        + "$t config get httpProxy 2>/dev/null; done"
+
+    static func pipSet(_ url: String) -> String { pip("config set global.proxy \(url)") }
+    static let pipUnset = pip("config unset global.proxy")
+    static let pipCheck = pip("config get global.proxy")
+    private static func pip(_ args: String) -> String { "pip3 \(args) 2>/dev/null || pip \(args)" }
 }
