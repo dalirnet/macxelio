@@ -1,10 +1,14 @@
 .PHONY: build
 build:
-	sh build.sh
+	sh dev.sh
 
 .PHONY: release
 release:
-	sh build.sh release
+	sh dev.sh release
+
+.PHONY: publish
+publish:
+	sh dev.sh publish
 
 .PHONY: run
 run: build
@@ -14,6 +18,7 @@ run: build
 
 .PHONY: format
 format:
+	pnpx prettier -w docs
 	swift-format format -i -r --configuration .swift-format Sources
 
 .PHONY: clean
