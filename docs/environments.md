@@ -6,7 +6,7 @@ Open it with **⇧⌘E** or from the menu bar.
 
 ## How it works
 
-Macxelio detects which tools are installed and lets you turn the proxy on or off for each one. When you enable a tool, it writes the proxy setting into that tool's config file; when you disable it, the setting is removed cleanly and the rest of your config is left untouched.
+Macxelio detects which tools are installed and lets you turn the proxy on or off for each one. When you enable a tool, it applies the proxy through that tool's own configuration — running its config command or editing its config file — and removes it cleanly when you disable it, leaving the rest of your config untouched.
 
 ## Supported tools
 
@@ -14,27 +14,25 @@ Macxelio detects which tools are installed and lets you turn the proxy on or off
 
 | Tool      | Config                  |
 | --------- | ----------------------- |
+| Shell env | `~/.zshrc`              |
 | git       | `~/.gitconfig`          |
 | docker    | `~/.docker/config.json` |
-| Shell env | `~/.zshrc`              |
 
 ### Editors
 
-| Tool    | Config                                                    |
-| ------- | --------------------------------------------------------- |
-| Zed     | `~/.config/zed/settings.json`                             |
-| VS Code | `~/Library/Application Support/Code/User/settings.json`   |
-| Cursor  | `~/Library/Application Support/Cursor/User/settings.json` |
+| Tool    | Config                                                  |
+| ------- | ------------------------------------------------------- |
+| Zed     | `~/.config/zed/settings.json`                           |
+| VS Code | `~/Library/Application Support/Code/User/settings.json` |
 
 ### Package Managers
 
-| Tool  | Config                   |
-| ----- | ------------------------ |
-| npm   | `~/.npmrc`               |
-| pip   | `~/.config/pip/pip.conf` |
-| conda | `~/.condarc`             |
-| cargo | `~/.cargo/config.toml`   |
-| gem   | `~/.gemrc`               |
-| go    | `~/.config/go/env`       |
+| Tool | Config                   |
+| ---- | ------------------------ |
+| npm  | `~/.npmrc`               |
+| pip  | `~/.config/pip/pip.conf` |
+| go   | `~/.config/go/env`       |
+
+> **npm** also configures **pnpm** and **yarn** when they're installed. Tools that already honor `HTTP_PROXY` (cargo, gem, conda, …) are covered by **Shell env**.
 
 > Changes apply to **new** sessions — open a fresh terminal, or restart your editor, after toggling.
