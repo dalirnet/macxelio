@@ -29,7 +29,7 @@ Eventually I built my own. Macxelio isn't trying to be the most powerful client 
 - **Protocols** — Shadowsocks, VLESS, VMess, Trojan, SOCKS, and HTTP.
 - **Routing rules** — decide what goes where by Domain, IP, GeoIP, or GeoSite, with Proxy / Direct / Block actions.
 - **Hosts & DNS** — custom host mappings and DNS servers, with optional system-wide DNS.
-- **Dev environments** — set up proxy settings for your tools too (npm, pip, cargo, git, docker, shell, and more).
+- **Dev environments** — set up proxy settings for your tools too: your shell, git, docker, editors (VS Code, Zed), and package managers (npm, pip, go).
 - **Live status** — checks your connection on a timer and shows a clear status on the active proxy, with an instant recheck on demand from the menu or status badge.
 - **Connections** — see what's connected and how it's being routed.
 
@@ -39,9 +39,11 @@ Macxelio runs on macOS 13.0 or later. It downloads the Xray-core it needs on fir
 
 ## Download
 
-[**Download the latest release**](https://github.com/dalirnet/macxelio/releases/latest), unzip it, and move **Macxelio.app** to your Applications folder.
+1. [**Download the latest release**](https://github.com/dalirnet/macxelio/releases/latest) (`Macxelio-x.y.z.zip`).
+2. Unzip it and move **Macxelio.app** to your **Applications** folder.
+3. The app isn't notarized, so right-click **Macxelio.app** → **Open** the first time, then confirm.
 
-The app isn't notarized, so the first time you open it: right-click **Macxelio.app** → **Open**, then confirm. If macOS still blocks it, allow it under **System Settings → Privacy & Security**.
+Macxelio appears in your menu bar — there's no Dock icon or window on launch. If macOS still blocks the app, allow it under **System Settings → Privacy & Security**.
 
 ## Build from source
 
