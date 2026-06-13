@@ -6,9 +6,11 @@ Macxelio runs on **macOS 13.0 or later**.
 
 ### Download
 
-[**Download the latest release**](https://github.com/dalirnet/macxelio/releases/latest), unzip it, and move **Macxelio.app** to your Applications folder.
+1. [**Download the latest release**](https://github.com/dalirnet/macxelio/releases/latest) (`Macxelio-x.y.z.zip`).
+2. Unzip it and move **Macxelio.app** to your **Applications** folder.
+3. The app isn't notarized, so right-click **Macxelio.app** → **Open** the first time, then confirm.
 
-The app isn't notarized, so the first time you open it: right-click **Macxelio.app** → **Open**, then confirm. If macOS still blocks it, allow it under **System Settings → Privacy & Security**.
+Macxelio launches straight into your menu bar — no Dock icon or window. If macOS still blocks the app, allow it under **System Settings → Privacy & Security**.
 
 ### Build from source
 
