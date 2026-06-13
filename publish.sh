@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Bump the version in Resources/Info.plist, optionally commit and push, then
-# build the universal app and publish it as a GitHub release asset.
+# Bump the version, merge the current branch into main, push, and publish the
+# universal app as a GitHub release from main.
 # Requires: gh (authenticated), make, swiftc.
 # Usage: ./publish.sh
 
 PLIST="Resources/Info.plist"
 APP="build/Macxelio.app"
+MAIN="main"
 
 # ─── Validate ───
 
@@ -51,46 +52,40 @@ case "${choice:-0}" in
 esac
 
 VERSION="${MAJOR}.${MINOR}.${PATCH}"
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# ─── Confirm ───
+
+echo ""
+echo "Release ${VERSION}: merge ${BRANCH} → ${MAIN}, push, and publish."
+read -rp "Continue? [y/N]: " confirm
+case "$confirm" in
+    y | Y) ;;
+    *) exit 0 ;;
+esac
 
 # ─── Apply bump ───
 
 if [[ "$VERSION" != "$CURRENT" ]]; then
     plist "Set :CFBundleShortVersionString ${VERSION}"
     plist "Set :CFBundleVersion ${VERSION}"
-    echo ""
     echo "==> ${CURRENT} → ${VERSION}"
 fi
 
-# ─── Prompt: action ───
-
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-echo ""
-echo "  0) skip"
-echo "  1) push     → commit (if changes) and push to origin/${BRANCH}"
-echo "  2) release  → build, push, and publish GitHub release ${VERSION}"
-echo ""
-read -rp "Select action [0-2]: " action
-action="${action:-0}"
-
-if [[ "$action" == "0" ]]; then
-    exit 0
-fi
-
-# ─── Commit & push ───
+# ─── Commit & push current branch ───
 
 git add "$PLIST"
 if ! git diff --cached --quiet; then
     git commit -m "chore: bump version to ${VERSION}"
 fi
-
 git push origin "$BRANCH"
-echo ""
-echo "==> Pushed ${BRANCH}"
 
-if [[ "$action" != "2" ]]; then
-    exit 0
-fi
+# ─── Merge into main and push ───
+
+git checkout "$MAIN"
+git merge "$BRANCH" --ff-only 2>/dev/null || git merge "$BRANCH" --no-edit
+git push origin "$MAIN"
+echo "==> Merged ${BRANCH} → ${MAIN}"
 
 # ─── Build artifact ───
 
@@ -106,22 +101,17 @@ echo "==> Packaged ${ZIP}"
 # ─── Publish GitHub release ───
 
 if gh release view "$VERSION" >/dev/null 2>&1; then
-    echo ""
-    echo "Warning: release ${VERSION} already exists"
-    read -rp "Delete existing release+tag and re-create at ${BRANCH}? [y/N]: " confirm
-    case "$confirm" in
-        y | Y) ;;
-        *) exit 1 ;;
-    esac
     gh release delete "$VERSION" --yes --cleanup-tag
-    git tag -d "$VERSION" 2>/dev/null || true
-    git fetch origin --prune --prune-tags >/dev/null 2>&1 || true
     echo "==> Deleted existing release ${VERSION}"
 fi
 
 gh release create "$VERSION" "$ZIP" \
     --title "$VERSION" \
-    --target "$BRANCH" \
+    --target "$MAIN" \
     --generate-notes
 echo ""
 echo "==> Published release ${VERSION}"
+
+# ─── Back to working branch ───
+
+git checkout "$BRANCH"
