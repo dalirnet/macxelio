@@ -51,13 +51,15 @@ struct SettingsView: View {
 
                         FormSection("DNS Server")
 
-                        FormFieldRow(label: "Primary DNS") {
-                            TextField("8.8.8.8", text: $appConfig.primaryDNS)
+                        FormFieldRow(label: "Primary DNS", error: dnsError(appConfig.primaryDNS)) {
+                            TextField("https://1.1.1.1/dns-query", text: $appConfig.primaryDNS)
                                 .rowTextField()
                         }
 
-                        FormFieldRow(label: "Secondary DNS") {
-                            TextField("1.1.1.1", text: $appConfig.secondaryDNS)
+                        FormFieldRow(
+                            label: "Secondary DNS", error: dnsError(appConfig.secondaryDNS)
+                        ) {
+                            TextField("8.8.8.8", text: $appConfig.secondaryDNS)
                                 .rowTextField()
                         }
                     }
@@ -73,6 +75,10 @@ struct SettingsView: View {
 
     private func portError(_ text: String) -> String? {
         text.isEmpty ? nil : Validator.portError(text)
+    }
+
+    private func dnsError(_ text: String) -> String? {
+        text.isEmpty ? nil : Validator.dnsServerError(text)
     }
 
     private func commitPorts() {

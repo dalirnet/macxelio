@@ -56,9 +56,18 @@ enum SystemDNS {
 
     private static func buildConfig() -> [String: Any] {
         let app = AppConfig.shared
-        var dns: [String: Any] = [
-            "servers": app.dnsServerList.isEmpty ? ["1.1.1.1", "8.8.8.8"] : app.dnsServerList
-        ]
+        var servers = app.dnsServerList.isEmpty ? ["1.1.1.1", "8.8.8.8"] : app.dnsServerList
+
+        // A DoH server addressed by hostname needs a plain resolver to bootstrap its TLS host.
+        let needsBootstrap = servers.contains { server in
+            guard let host = Validator.dohHost(server) else { return false }
+            return !Validator.isIP(host)
+        }
+        if needsBootstrap && !servers.contains(where: Validator.isIP) {
+            servers.append("1.1.1.1")
+        }
+
+        var dns: [String: Any] = ["servers": servers]
         if !app.hosts.isEmpty {
             var hostMap: [String: String] = [:]
             for host in app.hosts { hostMap[host.domain] = host.address }
@@ -76,9 +85,11 @@ enum SystemDNS {
                     "settings": ["address": "8.8.8.8", "port": 53, "network": "tcp,udp"],
                 ]
             ],
+            // "direct" is first so it is the default outbound: DoH/DoT queries the built-in
+            // DNS client makes egress through freedom, while dns-in is routed to dns-out.
             "outbounds": [
-                ["tag": "dns-out", "protocol": "dns"],
                 ["tag": "direct", "protocol": "freedom"],
+                ["tag": "dns-out", "protocol": "dns"],
             ],
             "routing": [
                 "rules": [["type": "field", "inboundTag": ["dns-in"], "outboundTag": "dns-out"]]
