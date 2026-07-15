@@ -24,6 +24,25 @@ enum Validator {
         isIP(value) || isDomain(value) ? nil : "Enter a valid domain or IP address."
     }
 
+    static func dnsServerError(_ value: String) -> String? {
+        isIP(value) || isDoH(value)
+            ? nil : "Enter an IP or DoH URL (e.g. https://1.1.1.1/dns-query)."
+    }
+
+    static func isDoH(_ value: String) -> Bool {
+        dohHost(value) != nil
+    }
+
+    /// Returns the host of a DNS-over-HTTPS URL (`https://` or `https+local://`), or nil.
+    static func dohHost(_ value: String) -> String? {
+        guard let url = URL(string: value.trimmingCharacters(in: .whitespaces)),
+            let scheme = url.scheme?.lowercased(),
+            scheme == "https" || scheme == "https+local",
+            let host = url.host, !host.isEmpty
+        else { return nil }
+        return host
+    }
+
     static func codeError(_ value: String) -> String? {
         matches(value, #"^[a-zA-Z0-9_-]+$"#) ? nil : "Use letters, numbers, or dashes only."
     }

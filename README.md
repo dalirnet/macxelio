@@ -28,7 +28,7 @@ Eventually I built my own. Macxelio isn't trying to be the most powerful client 
 - **Whole-Mac coverage** — works across your system, not just the browser, by setting the macOS proxy and DNS for you.
 - **Protocols** — Shadowsocks, VLESS, VMess, Trojan, SOCKS, and HTTP.
 - **Routing rules** — decide what goes where by Domain, IP, GeoIP, or GeoSite, with Proxy / Direct / Block actions.
-- **Hosts & DNS** — custom host mappings and DNS servers, with optional system-wide DNS.
+- **Hosts & DNS** — custom host mappings and DNS servers, including DNS-over-HTTPS (DoH), with optional system-wide DNS.
 - **Dev environments** — set up proxy settings for your tools too: your shell, git, docker, editors (VS Code, Zed), and package managers (npm, pip, go).
 - **Live status** — checks your connection on a timer and shows a clear status on the active proxy, with an instant recheck on demand from the menu or status badge.
 - **Connections** — see what's connected and how it's being routed.
