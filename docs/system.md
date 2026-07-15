@@ -16,10 +16,10 @@ When enabled, Macxelio runs a local DNS resolver and points your Mac at it, so t
 
 Toggle it from the menu bar (**System DNS**). Configure the servers in [Settings](settings.md):
 
-- **Primary DNS** — for example `8.8.8.8`
-- **Secondary DNS** — for example `1.1.1.1`
+- **Primary DNS** — a plain IP (for example `8.8.8.8`) or a DoH URL (for example `https://1.1.1.1/dns-query`)
+- **Secondary DNS** — a fallback server, in the same form
 
-Any [host mappings](routing.md) you've defined are applied alongside your DNS servers.
+Plain IP and encrypted **DNS-over-HTTPS (DoH)** servers are both supported. Any [host mappings](routing.md) you've defined are applied alongside your DNS servers.
 
 ### Administrator password
 

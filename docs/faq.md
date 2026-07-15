@@ -20,6 +20,10 @@ The proxy is unreachable. Check the server address, port, and credentials in [Pr
 
 Turning System DNS on **installs** a small DNS resolver as a system service, and turning it off **removes** it. Both require administrator rights, so macOS prompts each time you enable or disable it. It's macOS's standard authorization dialog — Macxelio never sees or stores your password. See [System Proxy & DNS](system.md).
 
+## Can I use an encrypted (DoH) DNS server?
+
+Yes. In [Settings](settings.md), enter a DNS-over-HTTPS URL such as `https://1.1.1.1/dns-query` as your Primary or Secondary DNS, then enable [System DNS](system.md). Plain IPs and DoH URLs can be mixed. IP-based DoH URLs work as-is; hostname-based ones are bootstrapped automatically.
+
 ## Some apps still bypass the proxy.
 
 The system proxy covers apps that honor macOS proxy settings. Tools that don't (many CLIs and Docker) need [Environments](environments.md) instead.
