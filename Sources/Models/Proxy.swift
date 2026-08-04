@@ -30,5 +30,12 @@ struct Proxy: Identifiable, Codable, Hashable {
             case .http: return "http"
             }
         }
+
+        var supportsUDP: Bool {
+            switch self {
+            case .vless, .vmess, .trojan: return true
+            case .shadowsocks, .socks, .http: return false
+            }
+        }
     }
 }

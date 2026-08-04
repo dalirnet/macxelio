@@ -209,8 +209,18 @@ class AppConfig: ObservableObject {
         }
     }
 
+    private var udpSupported: Bool {
+        guard proxyMode != .direct, let selectedId = selectedProxyId else { return true }
+        guard let proxy = proxies.first(where: { $0.id == selectedId }) else { return true }
+        return proxy.type.supportsUDP
+    }
+
     private func buildInbounds() -> [[String: Any]] {
         let listen = allowLAN ? "0.0.0.0" : "127.0.0.1"
+        let sniffing: [String: Any] = [
+            "enabled": true,
+            "destOverride": ["http", "tls", "quic"],
+        ]
 
         let inbounds: [[String: Any]] = [
             [
@@ -220,13 +230,10 @@ class AppConfig: ObservableObject {
                 "protocol": "socks",
                 "settings": [
                     "auth": "noauth",
-                    "udp": true,
+                    "udp": udpSupported,
                     "ip": listen,
                 ],
-                "sniffing": [
-                    "enabled": true,
-                    "destOverride": ["http", "tls"],
-                ],
+                "sniffing": sniffing,
             ],
             [
                 "tag": "http-inbound",
@@ -234,6 +241,7 @@ class AppConfig: ObservableObject {
                 "listen": listen,
                 "protocol": "http",
                 "settings": [:],
+                "sniffing": sniffing,
             ],
             [
                 "tag": "api",
@@ -365,6 +373,16 @@ class AppConfig: ObservableObject {
         }
 
         proxyOutbound["settings"] = serverSettings
+
+        if proxy.type.supportsUDP {
+            proxyOutbound["mux"] = [
+                "enabled": false,
+                "concurrency": -1,
+                "xudpConcurrency": 16,
+                "xudpProxyUDP443": "allow",
+            ]
+        }
+
         return proxyOutbound
     }
 
