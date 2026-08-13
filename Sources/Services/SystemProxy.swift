@@ -13,6 +13,7 @@ enum SystemProxy {
             networksetup("-setsecurewebproxystate", service, "off")
             networksetup("-setsocksfirewallproxystate", service, "off")
         }
+        QUICBlock.apply(enabled)
     }
 
     private static func networksetup(_ args: String...) {

@@ -10,6 +10,14 @@ Toggle it from the menu bar (**System Proxy**) or in the menu's submenu. The ind
 
 Macxelio cleans up the system proxy settings when you turn it off or quit.
 
+### QUIC / HTTP3
+
+macOS proxy settings only cover **TCP**. A browser's HTTP/3 traffic is raw **UDP on port 443**, so it ignores the system proxy entirely and leaves your Mac unproxied. On a network that drops QUIC, those requests hang until the browser gives up and retries over TCP — pages stall for seconds for no visible reason.
+
+To avoid that, System Proxy also blocks outbound UDP 443 while it is on. Browsers then fail QUIC instantly and fall back to HTTP/2 over the proxy, so nothing stalls and nothing escapes unproxied.
+
+The block is a `pf` firewall rule applied by a small system service — a launch daemon at `/Library/LaunchDaemons/com.macxelio.quic.plist`. macOS asks for your **administrator password** the first time you enable System Proxy, to install it; after that, turning System Proxy on and off never prompts again. The rule is removed whenever System Proxy is off or Macxelio quits.
+
 ## System DNS
 
 When enabled, Macxelio runs a local DNS resolver and points your Mac at it, so the DNS servers you configure — and any host mappings — are used system-wide.

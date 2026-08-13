@@ -16,7 +16,7 @@ enum SystemDNS {
         if !isInstalled() {
             let tmpPlist = "/tmp/\(label).plist"
             try? plistContent().write(toFile: tmpPlist, atomically: true, encoding: .utf8)
-            let installed = runAsRoot(
+            let installed = Shell.runAsRoot(
                 """
                 cp '\(tmpPlist)' '\(plistPath)'
                 chown root:wheel '\(plistPath)'
@@ -35,7 +35,7 @@ enum SystemDNS {
         guard isInstalled() else {
             return setSystemDNS("empty")
         }
-        let removed = runAsRoot(
+        let removed = Shell.runAsRoot(
             """
             launchctl bootout system/\(label) 2>/dev/null
             rm -f '\(plistPath)'
@@ -131,14 +131,5 @@ enum SystemDNS {
     private static func setSystemDNS(_ value: String) -> Bool {
         guard let service = Network.activeService() else { return false }
         return Shell.run("/usr/sbin/networksetup", ["-setdnsservers", service, value])
-    }
-
-    @discardableResult
-    private static func runAsRoot(_ shellScript: String) -> Bool {
-        let escaped = shellScript.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        return Shell.run(
-            "/usr/bin/osascript",
-            ["-e", "do shell script \"\(escaped)\" with administrator privileges"])
     }
 }
