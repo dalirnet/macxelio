@@ -17,6 +17,15 @@ enum Shell {
         return process.terminationStatus == 0
     }
 
+    @discardableResult
+    static func runAsRoot(_ shellScript: String) -> Bool {
+        let escaped = shellScript.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return run(
+            "/usr/bin/osascript",
+            ["-e", "do shell script \"\(escaped)\" with administrator privileges"])
+    }
+
     static func output(_ executable: String, _ args: [String]) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
