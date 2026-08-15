@@ -295,16 +295,18 @@ class AppConfig: ObservableObject {
 
         switch proxy.type {
         case .vless:
+            var user: [String: Any] = [
+                "id": proxy.uuid ?? "",
+                "encryption": "none",
+            ]
+            if let flow = proxy.flow, !flow.isEmpty, proxy.security != .none {
+                user["flow"] = flow
+            }
             serverSettings["vnext"] = [
                 [
                     "address": proxy.address,
                     "port": proxy.port,
-                    "users": [
-                        [
-                            "id": proxy.uuid ?? "",
-                            "encryption": "none",
-                        ]
-                    ],
+                    "users": [user],
                 ]
             ]
         case .vmess:
@@ -374,6 +376,10 @@ class AppConfig: ObservableObject {
 
         proxyOutbound["settings"] = serverSettings
 
+        if let streamSettings = buildStreamSettings(proxy: proxy) {
+            proxyOutbound["streamSettings"] = streamSettings
+        }
+
         if proxy.type.supportsUDP {
             proxyOutbound["mux"] = [
                 "enabled": false,
@@ -384,6 +390,33 @@ class AppConfig: ObservableObject {
         }
 
         return proxyOutbound
+    }
+
+    private func buildStreamSettings(proxy: Proxy) -> [String: Any]? {
+        guard proxy.type.supportsSecurity, proxy.security != .none else { return nil }
+
+        let sni = proxy.sni ?? ""
+        let fingerprint = proxy.fingerprint ?? ""
+
+        var settings: [String: Any] = [
+            "serverName": sni.isEmpty ? proxy.address : sni,
+            "fingerprint": fingerprint.isEmpty ? Proxy.defaultFingerprint : fingerprint,
+        ]
+
+        let isReality = proxy.security == .reality
+        if isReality {
+            settings["publicKey"] = proxy.publicKey ?? ""
+            if let shortId = proxy.shortId, !shortId.isEmpty { settings["shortId"] = shortId }
+            if let spiderX = proxy.spiderX, !spiderX.isEmpty { settings["spiderX"] = spiderX }
+        } else {
+            settings["allowInsecure"] = false
+        }
+
+        return [
+            "network": "tcp",
+            "security": proxy.security.value,
+            isReality ? "realitySettings" : "tlsSettings": settings,
+        ]
     }
 
     private func buildRouting() -> [String: Any] {
@@ -438,10 +471,24 @@ class AppConfig: ObservableObject {
             "port": proxy.port,
             "createdAt": Self.dateFormatter.string(from: proxy.createdAt),
         ]
-        if let uuid = proxy.uuid { dict["uuid"] = uuid }
-        if let password = proxy.password { dict["password"] = password }
-        if let method = proxy.method { dict["method"] = method }
-        if let username = proxy.username { dict["username"] = username }
+        if proxy.security != .none { dict["security"] = proxy.security.rawValue }
+
+        let optional: [String: String?] = [
+            "uuid": proxy.uuid,
+            "password": proxy.password,
+            "method": proxy.method,
+            "username": proxy.username,
+            "sni": proxy.sni,
+            "fingerprint": proxy.fingerprint,
+            "flow": proxy.flow,
+            "publicKey": proxy.publicKey,
+            "shortId": proxy.shortId,
+            "spiderX": proxy.spiderX,
+        ]
+        for (key, value) in optional {
+            if let value = value { dict[key] = value }
+        }
+
         return dict
     }
 
@@ -459,6 +506,15 @@ class AppConfig: ObservableObject {
         proxy.password = dict["password"] as? String
         proxy.method = dict["method"] as? String
         proxy.username = dict["username"] as? String
+        if let raw = dict["security"] as? String, let security = Proxy.Security(rawValue: raw) {
+            proxy.security = security
+        }
+        proxy.sni = dict["sni"] as? String
+        proxy.fingerprint = dict["fingerprint"] as? String
+        proxy.flow = dict["flow"] as? String
+        proxy.publicKey = dict["publicKey"] as? String
+        proxy.shortId = dict["shortId"] as? String
+        proxy.spiderX = dict["spiderX"] as? String
         if let dateStr = dict["createdAt"] as? String,
             let date = Self.dateFormatter.date(from: dateStr)
         {

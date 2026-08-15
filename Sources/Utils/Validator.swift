@@ -47,6 +47,13 @@ enum Validator {
         matches(value, #"^[a-zA-Z0-9_-]+$"#) ? nil : "Use letters, numbers, or dashes only."
     }
 
+    static func shortIdError(_ value: String) -> String? {
+        guard matches(value, #"^[0-9a-fA-F]+$"#), value.count % 2 == 0, value.count <= 16 else {
+            return "Enter up to 16 hex characters, in pairs."
+        }
+        return nil
+    }
+
     static func uuidError(_ value: String) -> String? {
         UUID(uuidString: value) != nil ? nil : "Enter a valid UUID."
     }
