@@ -21,6 +21,13 @@ extension View {
             .multilineTextAlignment(.trailing)
             .foregroundColor(.secondary)
     }
+
+    func fullTextField() -> some View {
+        self
+            .textFieldStyle(.plain)
+            .font(.system(size: 13))
+            .foregroundColor(.secondary)
+    }
 }
 
 struct FormSection: View {
@@ -43,11 +50,11 @@ struct FormSection: View {
 }
 
 struct FormFieldRow<Content: View>: View {
-    let label: String
+    let label: String?
     var error: String?
     let content: Content
 
-    init(label: String, error: String? = nil, @ViewBuilder content: () -> Content) {
+    init(label: String? = nil, error: String? = nil, @ViewBuilder content: () -> Content) {
         self.label = label
         self.error = error
         self.content = content()
@@ -56,11 +63,13 @@ struct FormFieldRow<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(label)
-                    .font(.system(size: 13))
+                if let label = label {
+                    Text(label)
+                        .font(.system(size: 13))
+                }
 
                 content
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .frame(maxWidth: .infinity, alignment: label == nil ? .leading : .trailing)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)

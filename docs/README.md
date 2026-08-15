@@ -11,7 +11,8 @@ Built to be lean and efficient — not packed with features you'll never use. It
 - **Menu bar control** — switch proxies, change mode, and turn the system proxy or DNS on and off without opening a window.
 - **Proxy modes** — send everything through the proxy (Global), route only what matches your rules (Rule), or skip it entirely (Direct).
 - **Whole-Mac coverage** — works across your system, not just the browser.
-- **Protocols** — Shadowsocks, VLESS, VMess, Trojan, SOCKS, and HTTP.
+- **Protocols** — Shadowsocks, VLESS, VMess, Trojan, SOCKS, and HTTP, with TLS and REALITY transport security.
+- **Share links** — paste a `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://`, or `http://` link and the proxy form fills itself.
 - **Routing** — rules by Domain, IP, GeoIP, or GeoSite, plus custom hosts and DNS, including DNS-over-HTTPS (DoH).
 - **Environments** — inject proxy settings into dev tools and package managers.
 - **Live status** — periodic latency checks with a clear status on the active proxy.

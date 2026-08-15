@@ -40,6 +40,7 @@ class ConnectivityChecker: ObservableObject {
     @Published var status: Status = .unknown
     @Published private(set) var nextInterval: Double = 0
     @Published private(set) var checkSequence: Int = 0
+    @Published private(set) var probes: [UUID: Status] = [:]
 
     private let timeout: TimeInterval = 3
     private let debounceDelay = 0.3
@@ -50,6 +51,7 @@ class ConnectivityChecker: ObservableObject {
     private var task: Task<Void, Never>?
     private var consecutiveOK = 0
     private var session: URLSession?
+    private var probeTasks: [UUID: Task<Void, Never>] = [:]
 
     func start() {
         restart()
@@ -60,6 +62,38 @@ class ConnectivityChecker: ObservableObject {
         session?.invalidateAndCancel()
         session = nil
         restart()
+    }
+
+    func probe(_ proxy: Proxy) {
+        let config = AppConfig.shared
+
+        guard let port = config.probePort(for: proxy),
+            let server = TestServer(rawValue: config.testServer),
+            let url = URL(string: server.url)
+        else {
+            probes[proxy.id] = .unknown
+            return
+        }
+
+        probeTasks[proxy.id]?.cancel()
+        probes[proxy.id] = .checking
+
+        probeTasks[proxy.id] = Task { [weak self] in
+            guard let self else { return }
+            let session = Self.makeSession(inboundPort: port, timeout: self.timeout)
+            let latency = await Self.measure(url: url, session: session)
+            session.invalidateAndCancel()
+
+            guard !Task.isCancelled else { return }
+            self.probes[proxy.id] = latency.map { .ok(latency: $0) } ?? .error
+            self.probeTasks[proxy.id] = nil
+        }
+    }
+
+    func forgetProbe(_ id: UUID) {
+        probeTasks[id]?.cancel()
+        probeTasks[id] = nil
+        probes[id] = nil
     }
 
     private var currentInterval: Double {

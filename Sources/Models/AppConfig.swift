@@ -215,6 +215,15 @@ class AppConfig: ObservableObject {
         return proxy.type.supportsUDP
     }
 
+    private static func probeTag(_ index: Int) -> String { "probe-\(index)" }
+
+    private static func probePort(_ index: Int) -> Int { testPort + 1 + index }
+
+    func probePort(for proxy: Proxy) -> Int? {
+        guard let index = proxies.firstIndex(where: { $0.id == proxy.id }) else { return nil }
+        return AppConfig.probePort(index)
+    }
+
     private func buildInbounds() -> [[String: Any]] {
         let listen = allowLAN ? "0.0.0.0" : "127.0.0.1"
         let sniffing: [String: Any] = [
@@ -222,7 +231,7 @@ class AppConfig: ObservableObject {
             "destOverride": ["http", "tls", "quic"],
         ]
 
-        let inbounds: [[String: Any]] = [
+        var inbounds: [[String: Any]] = [
             [
                 "tag": "socks-inbound",
                 "port": socksPort,
@@ -259,6 +268,16 @@ class AppConfig: ObservableObject {
             ],
         ]
 
+        for index in proxies.indices {
+            inbounds.append([
+                "tag": Self.probeTag(index),
+                "port": Self.probePort(index),
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": [:],
+            ])
+        }
+
         return inbounds
     }
 
@@ -268,7 +287,11 @@ class AppConfig: ObservableObject {
         if let selectedId = selectedProxyId,
             let proxy = proxies.first(where: { $0.id == selectedId })
         {
-            outbounds.append(buildProxyOutbound(proxy: proxy))
+            outbounds.append(buildProxyOutbound(proxy: proxy, tag: "proxy"))
+        }
+
+        for (index, proxy) in proxies.enumerated() {
+            outbounds.append(buildProxyOutbound(proxy: proxy, tag: Self.probeTag(index)))
         }
 
         outbounds.append([
@@ -285,9 +308,9 @@ class AppConfig: ObservableObject {
         return outbounds
     }
 
-    private func buildProxyOutbound(proxy: Proxy) -> [String: Any] {
+    private func buildProxyOutbound(proxy: Proxy, tag: String) -> [String: Any] {
         var proxyOutbound: [String: Any] = [
-            "tag": "proxy",
+            "tag": tag,
             "protocol": proxy.type.rawValue.lowercased(),
         ]
 
@@ -295,16 +318,18 @@ class AppConfig: ObservableObject {
 
         switch proxy.type {
         case .vless:
+            var user: [String: Any] = [
+                "id": proxy.uuid ?? "",
+                "encryption": "none",
+            ]
+            if let flow = proxy.flow, !flow.isEmpty, proxy.security != .none {
+                user["flow"] = flow
+            }
             serverSettings["vnext"] = [
                 [
                     "address": proxy.address,
                     "port": proxy.port,
-                    "users": [
-                        [
-                            "id": proxy.uuid ?? "",
-                            "encryption": "none",
-                        ]
-                    ],
+                    "users": [user],
                 ]
             ]
         case .vmess:
@@ -374,6 +399,10 @@ class AppConfig: ObservableObject {
 
         proxyOutbound["settings"] = serverSettings
 
+        if let streamSettings = buildStreamSettings(proxy: proxy) {
+            proxyOutbound["streamSettings"] = streamSettings
+        }
+
         if proxy.type.supportsUDP {
             proxyOutbound["mux"] = [
                 "enabled": false,
@@ -386,6 +415,33 @@ class AppConfig: ObservableObject {
         return proxyOutbound
     }
 
+    private func buildStreamSettings(proxy: Proxy) -> [String: Any]? {
+        guard proxy.type.supportsSecurity, proxy.security != .none else { return nil }
+
+        let sni = proxy.sni ?? ""
+        let fingerprint = proxy.fingerprint ?? ""
+
+        var settings: [String: Any] = [
+            "serverName": sni.isEmpty ? proxy.address : sni,
+            "fingerprint": fingerprint.isEmpty ? Proxy.defaultFingerprint : fingerprint,
+        ]
+
+        let isReality = proxy.security == .reality
+        if isReality {
+            settings["publicKey"] = proxy.publicKey ?? ""
+            if let shortId = proxy.shortId, !shortId.isEmpty { settings["shortId"] = shortId }
+            if let spiderX = proxy.spiderX, !spiderX.isEmpty { settings["spiderX"] = spiderX }
+        } else {
+            settings["allowInsecure"] = false
+        }
+
+        return [
+            "network": "tcp",
+            "security": proxy.security.value,
+            isReality ? "realitySettings" : "tlsSettings": settings,
+        ]
+    }
+
     private func buildRouting() -> [String: Any] {
         var routingRules: [[String: Any]] = [
             ["type": "field", "inboundTag": ["api"], "outboundTag": "api"]
@@ -394,6 +450,14 @@ class AppConfig: ObservableObject {
         if selectedProxyId != nil {
             routingRules.append([
                 "type": "field", "inboundTag": ["test"], "outboundTag": "proxy",
+            ])
+        }
+
+        for index in proxies.indices {
+            routingRules.append([
+                "type": "field",
+                "inboundTag": [Self.probeTag(index)],
+                "outboundTag": Self.probeTag(index),
             ])
         }
 
@@ -438,10 +502,24 @@ class AppConfig: ObservableObject {
             "port": proxy.port,
             "createdAt": Self.dateFormatter.string(from: proxy.createdAt),
         ]
-        if let uuid = proxy.uuid { dict["uuid"] = uuid }
-        if let password = proxy.password { dict["password"] = password }
-        if let method = proxy.method { dict["method"] = method }
-        if let username = proxy.username { dict["username"] = username }
+        if proxy.security != .none { dict["security"] = proxy.security.rawValue }
+
+        let optional: [String: String?] = [
+            "uuid": proxy.uuid,
+            "password": proxy.password,
+            "method": proxy.method,
+            "username": proxy.username,
+            "sni": proxy.sni,
+            "fingerprint": proxy.fingerprint,
+            "flow": proxy.flow,
+            "publicKey": proxy.publicKey,
+            "shortId": proxy.shortId,
+            "spiderX": proxy.spiderX,
+        ]
+        for (key, value) in optional {
+            if let value = value { dict[key] = value }
+        }
+
         return dict
     }
 
@@ -459,6 +537,15 @@ class AppConfig: ObservableObject {
         proxy.password = dict["password"] as? String
         proxy.method = dict["method"] as? String
         proxy.username = dict["username"] as? String
+        if let raw = dict["security"] as? String, let security = Proxy.Security(rawValue: raw) {
+            proxy.security = security
+        }
+        proxy.sni = dict["sni"] as? String
+        proxy.fingerprint = dict["fingerprint"] as? String
+        proxy.flow = dict["flow"] as? String
+        proxy.publicKey = dict["publicKey"] as? String
+        proxy.shortId = dict["shortId"] as? String
+        proxy.spiderX = dict["spiderX"] as? String
         if let dateStr = dict["createdAt"] as? String,
             let date = Self.dateFormatter.date(from: dateStr)
         {
