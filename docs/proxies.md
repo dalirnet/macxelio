@@ -23,14 +23,14 @@ Supported: `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://`, `http://`. 
 
 VLESS, VMess, and Trojan can run over plain TCP, **TLS**, or **REALITY**.
 
-| Field          | Applies to     | Share-link name |
-| -------------- | -------------- | --------------- |
-| **SNI**        | TLS, REALITY   | `sni`           |
-| **Fingerprint**| TLS, REALITY   | `fp`            |
-| **Flow**       | VLESS          | `flow`          |
-| **Public Key** | REALITY        | `pbk`           |
-| **Short ID**   | REALITY        | `sid`           |
-| **SpiderX**    | REALITY        | `spx`           |
+| Field           | Applies to   | Share-link name |
+| --------------- | ------------ | --------------- |
+| **SNI**         | TLS, REALITY | `sni`           |
+| **Fingerprint** | TLS, REALITY | `fp`            |
+| **Flow**        | VLESS        | `flow`          |
+| **Public Key**  | REALITY      | `pbk`           |
+| **Short ID**    | REALITY      | `sid`           |
+| **SpiderX**     | REALITY      | `spx`           |
 
 Leave **SNI** empty to use the server address. **Public Key** is required for REALITY; **Short ID** and **SpiderX** are optional and must match the server.
 

@@ -14,6 +14,8 @@ Macxelio checks the active proxy on a timer and shows a status on its avatar in 
 
 When connected, the avatar shows the measured latency, and a thin ring fills as a countdown to the next check.
 
+Click any proxy's avatar to test that proxy on demand. Testing an inactive proxy measures it through its own server without switching to it — click anywhere else on the card to make it active.
+
 The menu bar icon also reflects the status — solid when connected, dimmed otherwise.
 
 ## Connections

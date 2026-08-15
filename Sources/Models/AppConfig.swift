@@ -215,6 +215,15 @@ class AppConfig: ObservableObject {
         return proxy.type.supportsUDP
     }
 
+    private static func probeTag(_ index: Int) -> String { "probe-\(index)" }
+
+    private static func probePort(_ index: Int) -> Int { testPort + 1 + index }
+
+    func probePort(for proxy: Proxy) -> Int? {
+        guard let index = proxies.firstIndex(where: { $0.id == proxy.id }) else { return nil }
+        return AppConfig.probePort(index)
+    }
+
     private func buildInbounds() -> [[String: Any]] {
         let listen = allowLAN ? "0.0.0.0" : "127.0.0.1"
         let sniffing: [String: Any] = [
@@ -222,7 +231,7 @@ class AppConfig: ObservableObject {
             "destOverride": ["http", "tls", "quic"],
         ]
 
-        let inbounds: [[String: Any]] = [
+        var inbounds: [[String: Any]] = [
             [
                 "tag": "socks-inbound",
                 "port": socksPort,
@@ -259,6 +268,16 @@ class AppConfig: ObservableObject {
             ],
         ]
 
+        for index in proxies.indices {
+            inbounds.append([
+                "tag": Self.probeTag(index),
+                "port": Self.probePort(index),
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": [:],
+            ])
+        }
+
         return inbounds
     }
 
@@ -268,7 +287,11 @@ class AppConfig: ObservableObject {
         if let selectedId = selectedProxyId,
             let proxy = proxies.first(where: { $0.id == selectedId })
         {
-            outbounds.append(buildProxyOutbound(proxy: proxy))
+            outbounds.append(buildProxyOutbound(proxy: proxy, tag: "proxy"))
+        }
+
+        for (index, proxy) in proxies.enumerated() {
+            outbounds.append(buildProxyOutbound(proxy: proxy, tag: Self.probeTag(index)))
         }
 
         outbounds.append([
@@ -285,9 +308,9 @@ class AppConfig: ObservableObject {
         return outbounds
     }
 
-    private func buildProxyOutbound(proxy: Proxy) -> [String: Any] {
+    private func buildProxyOutbound(proxy: Proxy, tag: String) -> [String: Any] {
         var proxyOutbound: [String: Any] = [
-            "tag": "proxy",
+            "tag": tag,
             "protocol": proxy.type.rawValue.lowercased(),
         ]
 
@@ -427,6 +450,14 @@ class AppConfig: ObservableObject {
         if selectedProxyId != nil {
             routingRules.append([
                 "type": "field", "inboundTag": ["test"], "outboundTag": "proxy",
+            ])
+        }
+
+        for index in proxies.indices {
+            routingRules.append([
+                "type": "field",
+                "inboundTag": [Self.probeTag(index)],
+                "outboundTag": Self.probeTag(index),
             ])
         }
 

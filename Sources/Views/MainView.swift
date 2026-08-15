@@ -115,14 +115,16 @@ struct MainView: View {
                         appConfig.proxies,
                         onEdit: { proxy in navigate(to: .editProxy(proxy)) },
                         onDelete: { proxy in
+                            connectivity.forgetProbe(proxy.id)
                             appConfig.deleteProxy(proxy)
                         }
                     ) { proxy in
                         let isSelected = appConfig.selectedProxyId == proxy.id
+                        let probed = connectivity.probes[proxy.id] ?? .unknown
                         ProxyRow(
                             proxy: proxy,
                             isSelected: isSelected,
-                            status: isSelected ? connectivity.status : .unknown,
+                            status: isSelected ? connectivity.status : probed,
                             checkInterval: isSelected ? connectivity.nextInterval : 0,
                             checkSequence: isSelected ? connectivity.checkSequence : 0,
                             xrayRunning: xrayCore.isRunning,
@@ -137,8 +139,11 @@ struct MainView: View {
                                 connectivity.check()
                             },
                             onCheck: {
-                                if !isSelected { appConfig.selectedProxyId = proxy.id }
-                                connectivity.check()
+                                if isSelected {
+                                    connectivity.check()
+                                } else {
+                                    connectivity.probe(proxy)
+                                }
                             }
                         )
                     }
