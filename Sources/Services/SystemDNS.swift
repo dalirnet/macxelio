@@ -5,6 +5,9 @@ enum SystemDNS {
     static let plistPath = "/Library/LaunchDaemons/com.macxelio.dns.plist"
     static let configPath = Tools.dir.appendingPathComponent("dns.json")
 
+    private static let internalTag = "dns-internal"
+    private static let fallbackServer = "1.1.1.1"
+
     static func isInstalled() -> Bool {
         FileManager.default.fileExists(atPath: plistPath)
     }
@@ -56,23 +59,11 @@ enum SystemDNS {
 
     private static func buildConfig() -> [String: Any] {
         let app = AppConfig.shared
-        var servers = app.dnsServerList.isEmpty ? ["1.1.1.1", "8.8.8.8"] : app.dnsServerList
-
-        // A DoH server addressed by hostname needs a plain resolver to bootstrap its TLS host.
-        let needsBootstrap = servers.contains { server in
-            guard let host = Validator.dohHost(server) else { return false }
-            return !Validator.isIP(host)
-        }
-        if needsBootstrap && !servers.contains(where: Validator.isIP) {
-            servers.append("1.1.1.1")
-        }
-
-        var dns: [String: Any] = ["servers": servers]
-        if !app.hosts.isEmpty {
-            var hostMap: [String: String] = [:]
-            for host in app.hosts { hostMap[host.domain] = host.address }
-            dns["hosts"] = hostMap
-        }
+        let servers = app.dnsServerList.isEmpty ? [fallbackServer, "8.8.8.8"] : app.dnsServerList
+        let viaProxy =
+            app.proxyMode != .direct
+            && app.proxies.contains { $0.id == app.selectedProxyId }
+            && servers.contains { $0.lowercased().hasPrefix("https://") }
 
         return [
             "log": ["loglevel": "error"],
@@ -85,17 +76,80 @@ enum SystemDNS {
                     "settings": ["address": "8.8.8.8", "port": 53, "network": "tcp,udp"],
                 ]
             ],
-            // "direct" is first so it is the default outbound: DoH/DoT queries the built-in
-            // DNS client makes egress through freedom, while dns-in is routed to dns-out.
-            "outbounds": [
-                ["tag": "direct", "protocol": "freedom"],
-                ["tag": "dns-out", "protocol": "dns"],
-            ],
-            "routing": [
-                "rules": [["type": "field", "inboundTag": ["dns-in"], "outboundTag": "dns-out"]]
-            ],
-            "dns": dns,
+            "outbounds": buildOutbounds(viaProxy: viaProxy),
+            "routing": buildRouting(viaProxy: viaProxy),
+            "dns": buildDNS(servers: servers, viaProxy: viaProxy),
         ]
+    }
+
+    private static func buildDNS(servers: [String], viaProxy: Bool) -> [String: Any] {
+        let app = AppConfig.shared
+        let plain = servers.first(where: Validator.isIP) ?? fallbackServer
+        var entries: [Any] = servers
+
+        // A DoH server addressed by hostname needs a plain resolver to bootstrap its TLS host,
+        // and DoH through the proxy needs one to fall back on when the proxy is down.
+        let needsBootstrap = servers.contains { server in
+            guard let host = Validator.dohHost(server) else { return false }
+            return !Validator.isIP(host)
+        }
+        if (needsBootstrap || viaProxy) && !servers.contains(where: Validator.isIP) {
+            entries.append(plain)
+        }
+
+        let proxyHosts = Set(app.proxies.map(\.address).filter { !Validator.isIP($0) })
+        if viaProxy && !proxyHosts.isEmpty {
+            let domains = proxyHosts.sorted().map { "full:\($0)" }
+            entries.insert(["address": plain, "domains": domains, "skipFallback": true], at: 0)
+        }
+
+        var dns: [String: Any] = ["tag": internalTag, "servers": entries]
+        if !app.hosts.isEmpty {
+            var hostMap: [String: String] = [:]
+            for host in app.hosts { hostMap[host.domain] = host.address }
+            dns["hosts"] = hostMap
+        }
+
+        return dns
+    }
+
+    // "direct" is first so it is the default outbound: plain UDP queries the built-in DNS client
+    // makes egress through freedom. With a proxy selected, its DoH (TCP) queries go through the
+    // main Xray's SOCKS inbound instead; https+local:// always dials directly, bypassing routing.
+    private static func buildOutbounds(viaProxy: Bool) -> [[String: Any]] {
+        var outbounds: [[String: Any]] = [
+            ["tag": "direct", "protocol": "freedom"],
+            ["tag": "dns-out", "protocol": "dns"],
+        ]
+
+        if viaProxy {
+            outbounds.append([
+                "tag": "proxy",
+                "protocol": "socks",
+                "settings": [
+                    "servers": [["address": "127.0.0.1", "port": AppConfig.shared.socksPort]]
+                ],
+            ])
+        }
+
+        return outbounds
+    }
+
+    private static func buildRouting(viaProxy: Bool) -> [String: Any] {
+        var rules: [[String: Any]] = [
+            ["type": "field", "inboundTag": ["dns-in"], "outboundTag": "dns-out"]
+        ]
+
+        if viaProxy {
+            rules.append([
+                "type": "field",
+                "inboundTag": [internalTag],
+                "network": "tcp",
+                "outboundTag": "proxy",
+            ])
+        }
+
+        return ["rules": rules]
     }
 
     private static func plistContent() -> String {
