@@ -16,9 +16,13 @@ Tool and shell configs apply to **new** sessions. Open a fresh terminal after ch
 
 The proxy is unreachable. Check the server address, port, and credentials in [Proxies](proxies.md), confirm the server is up, then use the restart button to re-check.
 
-## Why does System DNS ask for my password every time?
+## Why does Macxelio ask for my password?
 
-Turning System DNS on **installs** a small DNS resolver as a system service, and turning it off **removes** it. Both require administrator rights, so macOS prompts each time you enable or disable it. It's macOS's standard authorization dialog — Macxelio never sees or stores your password. See [System Proxy & DNS](system.md).
+System Tunnel, System DNS, and the System Proxy firewall rule need a small system helper. macOS asks for your **administrator password** once, to install it — after that, turning these on and off never prompts again. It's macOS's standard authorization dialog — Macxelio never sees or stores your password. With Touch ID enabled for `sudo`, you can use your fingerprint instead. See [System Tunnel, Proxy & DNS](system.md#administrator-password).
+
+## Does WebRTC leak my IP?
+
+Not with **System Tunnel** on — WebRTC goes through the proxy like everything else. With only **System Proxy** on, browsers send WebRTC directly, so Macxelio blocks it by default; calls then fall back to slower relays or may fail. Use System Tunnel for full WebRTC support. See [WebRTC & UDP](system.md#webrtc--udp).
 
 ## Can I use an encrypted (DoH) DNS server?
 
@@ -26,7 +30,7 @@ Yes. In [Settings](settings.md), enter a DNS-over-HTTPS URL such as `https://1.1
 
 ## Some apps still bypass the proxy.
 
-The system proxy covers apps that honor macOS proxy settings. Tools that don't (many CLIs and Docker) need [Environments](environments.md) instead.
+The system proxy covers apps that honor macOS proxy settings. Turn on [System Tunnel](system.md#system-tunnel) to capture every app, or use [Environments](environments.md) for CLIs that read proxy variables.
 
 ## How do I route only some traffic?
 

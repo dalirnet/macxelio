@@ -8,9 +8,9 @@ Built to be lean and efficient — not packed with features you'll never use. It
 
 ## What it does
 
-- **Menu bar control** — switch proxies, change mode, and turn the system proxy or DNS on and off without opening a window.
+- **Menu bar control** — switch proxies, change mode, and turn the system tunnel, proxy, or DNS on and off without opening a window.
 - **Proxy modes** — send everything through the proxy (Global), route only what matches your rules (Rule), or skip it entirely (Direct).
-- **Whole-Mac coverage** — works across your system, not just the browser.
+- **Whole-Mac coverage** — System Tunnel routes every app through the proxy, TCP and UDP alike, so WebRTC never reveals your real IP.
 - **Protocols** — Shadowsocks, VLESS, VMess, Trojan, SOCKS, and HTTP, with TLS and REALITY transport security.
 - **Share links** — paste a `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://`, or `http://` link and the proxy form fills itself.
 - **Routing** — rules by Domain, IP, GeoIP, or GeoSite, plus custom hosts and DNS, including DNS-over-HTTPS (DoH).

@@ -27,20 +27,22 @@ On first launch, Macxelio downloads the Xray-core binary it needs — there's no
 1. The app appears as a **flame icon in your menu bar**.
 2. Open the main window from the menu bar item, or click the app.
 3. Add a proxy (see [Proxies](proxies.md)) and select it.
-4. Pick a [mode](routing.md) and, optionally, turn on the [system proxy](system.md).
+4. Pick a [mode](routing.md) and, optionally, turn on the [system proxy](system.md) or the [system tunnel](system.md#system-tunnel).
 
 ## The menu bar
 
 Click the flame icon to get quick controls without opening a window:
 
-| Item             | What it does                                                    |
-| ---------------- | --------------------------------------------------------------- |
-| Active proxy     | Shows the selected proxy and its latency; click to open the app |
-| **Proxy Mode**   | Switch between Global, Rule, and Direct                         |
-| **System Proxy** | Turn the macOS system proxy on or off                           |
-| **System DNS**   | Turn system-wide DNS on or off                                  |
-| Pages            | Jump straight to Rules, Hosts, Environments, or Connections     |
-| **Quit**         | Quit Macxelio                                                   |
+| Item              | What it does                                                    |
+| ----------------- | --------------------------------------------------------------- |
+| Active proxy      | Shows the selected proxy and its latency; click to open the app |
+| **Proxy Mode**    | Switch between Global, Rule, and Direct                         |
+| **System Tunnel** | Route all traffic through the proxy, including UDP              |
+| **System Proxy**  | Route web traffic through the proxy                             |
+| **System DNS**    | Use your DNS servers system-wide                                |
+| Pages             | Jump straight to Rules, Hosts, Environments, or Connections     |
+| **Settings**      | Open Settings                                                   |
+| **Quit**          | Quit Macxelio                                                   |
 
 Each item shows its current state at a glance — a filled, half, or outline circle for the mode, and filled/outline for the system toggles.
 

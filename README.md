@@ -23,9 +23,9 @@ Eventually I built my own. Macxelio isn't trying to be the most powerful client 
 
 ## Features
 
-- **Menu bar control** — switch proxies, change mode, and turn the system proxy or DNS on and off without opening a window. Every item shows its current state at a glance.
+- **Menu bar control** — switch proxies, change mode, and turn the system tunnel, proxy, or DNS on and off without opening a window. Every item shows its current state at a glance.
 - **Proxy modes** — send everything through the proxy (Global), route only what matches your rules (Rule), or skip it entirely (Direct).
-- **Whole-Mac coverage** — works across your system, not just the browser, by setting the macOS proxy and DNS for you.
+- **Whole-Mac coverage** — System Tunnel routes every app through the proxy, TCP and UDP alike, so WebRTC never reveals your real IP. Or let Macxelio set the macOS proxy and DNS for you, with WebRTC and QUIC guards.
 - **Protocols** — Shadowsocks, VLESS, VMess, Trojan, SOCKS, and HTTP, with TLS and REALITY transport security.
 - **Share links** — paste a `vless://`, `vmess://`, `trojan://`, `ss://`, `socks://`, or `http://` link and the proxy form fills itself.
 - **Routing rules** — decide what goes where by Domain, IP, GeoIP, or GeoSite, with Proxy / Direct / Block actions.

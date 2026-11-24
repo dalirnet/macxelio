@@ -7,7 +7,7 @@
 
     - [Proxies](proxies.md)
     - [Modes & Routing](routing.md)
-    - [System Proxy & DNS](system.md)
+    - [System Tunnel, Proxy & DNS](system.md)
     - [Environments](environments.md)
 
 - Monitor

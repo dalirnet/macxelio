@@ -11,6 +11,13 @@ Open settings with **⌘,** or from the menu bar.
 
 Changing a port restarts the local proxy automatically; if [System Proxy](system.md) is on, it's re-applied to the new port.
 
+## Privacy
+
+- **WebRTC Guard** — while System Proxy is on (and System Tunnel is off), block direct UDP so WebRTC can't reveal your real IP. On by default.
+- **QUIC Guard** — while System Proxy is on, block HTTP/3 (QUIC, UDP 443) so browsers use HTTP/2 through the proxy. On by default.
+
+See [WebRTC & UDP](system.md#webrtc--udp).
+
 ## DNS Server
 
 - **Primary DNS** — your main DNS server. Enter a plain IP (for example `8.8.8.8`) or a DNS-over-HTTPS (DoH) URL (for example `https://1.1.1.1/dns-query`).
