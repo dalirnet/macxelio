@@ -32,6 +32,6 @@ case "$CONFIG" in
 esac
 
 cp Resources/Info.plist "$APP/Contents/"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp Resources/AppIcon.icns Resources/helper.sh "$APP/Contents/Resources/"
 
 echo "Done: $APP"

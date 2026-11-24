@@ -1,50 +1,22 @@
 import Foundation
 
 enum SystemDNS {
-    static let label = "com.macxelio.dns"
-    static let plistPath = "/Library/LaunchDaemons/com.macxelio.dns.plist"
     static let configPath = Tools.dir.appendingPathComponent("dns.json")
 
     private static let internalTag = "dns-internal"
     private static let fallbackServer = "1.1.1.1"
+    private static let defaultServers = [fallbackServer, "8.8.8.8"]
 
-    static func isInstalled() -> Bool {
-        FileManager.default.fileExists(atPath: plistPath)
+    static var bootstrapServer: String {
+        AppConfig.shared.dnsServerList.first(where: Validator.isIP) ?? fallbackServer
     }
 
-    @discardableResult
-    static func enable() -> Bool {
-        writeConfig()
-
-        if !isInstalled() {
-            let tmpPlist = "/tmp/\(label).plist"
-            try? plistContent().write(toFile: tmpPlist, atomically: true, encoding: .utf8)
-            let installed = Shell.runAsRoot(
-                """
-                cp '\(tmpPlist)' '\(plistPath)'
-                chown root:wheel '\(plistPath)'
-                chmod 644 '\(plistPath)'
-                launchctl bootout system/\(label) 2>/dev/null
-                launchctl bootstrap system '\(plistPath)'
-                """)
-            guard installed else { return false }
-        }
-
-        return setSystemDNS("127.0.0.1")
+    static func point(_ service: String) {
+        Shell.run("/usr/sbin/networksetup", ["-setdnsservers", service, "127.0.0.1"])
     }
 
-    @discardableResult
-    static func disable() -> Bool {
-        guard isInstalled() else {
-            return setSystemDNS("empty")
-        }
-        let removed = Shell.runAsRoot(
-            """
-            launchctl bootout system/\(label) 2>/dev/null
-            rm -f '\(plistPath)'
-            """)
-        guard removed else { return false }
-        return setSystemDNS("empty")
+    static func reset(_ service: String) {
+        Shell.run("/usr/sbin/networksetup", ["-setdnsservers", service, "empty"])
     }
 
     static func writeConfig() {
@@ -53,17 +25,16 @@ enum SystemDNS {
                 withJSONObject: buildConfig(), options: [.prettyPrinted, .sortedKeys])
         else { return }
         if (try? Data(contentsOf: configPath)) != data {
-            try? data.write(to: configPath)
+            try? data.write(to: configPath, options: .atomic)
         }
     }
 
     private static func buildConfig() -> [String: Any] {
         let app = AppConfig.shared
-        let servers = app.dnsServerList.isEmpty ? [fallbackServer, "8.8.8.8"] : app.dnsServerList
+        let servers = app.dnsServerList.isEmpty ? defaultServers : app.dnsServerList
         let viaProxy =
-            app.proxyMode != .direct
-            && app.proxies.contains { $0.id == app.selectedProxyId }
-            && servers.contains { $0.lowercased().hasPrefix("https://") }
+            app.usesProxy
+            && (app.tunnelActive || servers.contains { $0.lowercased().hasPrefix("https://") })
 
         return [
             "log": ["loglevel": "error"],
@@ -84,8 +55,9 @@ enum SystemDNS {
 
     private static func buildDNS(servers: [String], viaProxy: Bool) -> [String: Any] {
         let app = AppConfig.shared
-        let plain = servers.first(where: Validator.isIP) ?? fallbackServer
-        var entries: [Any] = servers
+        let plain = bootstrapServer
+        let tunnel = app.tunnelActive
+        var entries: [Any] = servers.map { tunnel && Validator.isIP($0) ? "tcp://\($0)" : $0 }
 
         // A DoH server addressed by hostname needs a plain resolver to bootstrap its TLS host,
         // and DoH through the proxy needs one to fall back on when the proxy is down.
@@ -100,7 +72,8 @@ enum SystemDNS {
         let proxyHosts = Set(app.proxies.map(\.address).filter { !Validator.isIP($0) })
         if viaProxy && !proxyHosts.isEmpty {
             let domains = proxyHosts.sorted().map { "full:\($0)" }
-            entries.insert(["address": plain, "domains": domains, "skipFallback": true], at: 0)
+            let address = tunnel ? "tcp+local://\(plain)" : plain
+            entries.insert(["address": address, "domains": domains, "skipFallback": true], at: 0)
         }
 
         var dns: [String: Any] = ["tag": internalTag, "servers": entries]
@@ -150,40 +123,5 @@ enum SystemDNS {
         }
 
         return ["rules": rules]
-    }
-
-    private static func plistContent() -> String {
-        let xray = Tools.url("xray").path
-        let config = configPath.path
-        let supervisor =
-            "BIN=\"\(xray)\"; CFG=\"\(config)\"; "
-            + "while true; do \"$BIN\" run -c \"$CFG\" &amp; PID=$!; STAMP=$(stat -f %m \"$CFG\"); "
-            + "while kill -0 \"$PID\" 2&gt;/dev/null; do "
-            + "if [ \"$(stat -f %m \"$CFG\")\" != \"$STAMP\" ]; then kill \"$PID\"; break; fi; "
-            + "sleep 1; done; wait \"$PID\"; done"
-
-        return """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>Label</key><string>\(label)</string>
-                <key>ProgramArguments</key>
-                <array>
-                    <string>/bin/sh</string>
-                    <string>-c</string>
-                    <string>\(supervisor)</string>
-                </array>
-                <key>RunAtLoad</key><true/>
-                <key>KeepAlive</key><true/>
-            </dict>
-            </plist>
-            """
-    }
-
-    @discardableResult
-    private static func setSystemDNS(_ value: String) -> Bool {
-        guard let service = Network.activeService() else { return false }
-        return Shell.run("/usr/sbin/networksetup", ["-setdnsservers", service, value])
     }
 }

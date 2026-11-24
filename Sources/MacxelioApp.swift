@@ -15,20 +15,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDele
         if xrayCore.isInstalled() {
             appConfig.save()
             xrayCore.start()
-            if appConfig.systemProxyEnabled { SystemProxy.apply(true) }
-            if appConfig.dnsServerEnabled {
-                DispatchQueue.global().async {
-                    if !SystemDNS.enable() {
-                        DispatchQueue.main.async { self.appConfig.dnsServerEnabled = false }
-                    }
-                }
-            }
+            SystemSync.shared.start()
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if appConfig.systemProxyEnabled { SystemProxy.apply(false) }
-        if SystemDNS.isInstalled() { SystemDNS.disable() }
+        SystemSync.shared.teardown()
         xrayCore.stop()
     }
 
@@ -120,6 +112,7 @@ struct MacxelioApp: App {
                         setupStep = .ready
                         appDelegate.appConfig.save()
                         appDelegate.xrayCore.start()
+                        SystemSync.shared.start()
                         appDelegate.setupStatusBar()
                     }
                 case .ready:
