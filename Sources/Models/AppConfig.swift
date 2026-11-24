@@ -10,16 +10,24 @@ class AppConfig: ObservableObject {
 
     private static let dateFormatter = ISO8601DateFormatter()
 
-    private let configPath = Tools.url("config.json")
+    private let configPath = Tools.config
     private let settingsPath = Tools.url("settings.json")
     private var isLoading = false
 
     @Published var allowLAN: Bool = false { didSet { saveAndNotify() } }
-    @Published var httpPort: Int = AppConfig.defaultHTTPPort { didSet { portsChanged() } }
-    @Published var socksPort: Int = AppConfig.defaultSOCKSPort { didSet { portsChanged() } }
+    @Published var httpPort: Int = AppConfig.defaultHTTPPort { didSet { saveAndNotify() } }
+    @Published var socksPort: Int = AppConfig.defaultSOCKSPort { didSet { saveAndNotify() } }
     @Published var testServer: String = TestServer.google.rawValue { didSet { saveAndNotify() } }
     @Published var systemProxyEnabled: Bool = false { didSet { saveAndNotify() } }
     @Published var dnsServerEnabled: Bool = false { didSet { saveAndNotify() } }
+    @Published var tunnelEnabled: Bool = false {
+        didSet {
+            if oldValue && !tunnelEnabled && !isLoading { systemProxyEnabled = true }
+            saveAndNotify()
+        }
+    }
+    @Published var blockWebRTC: Bool = true { didSet { saveAndNotify() } }
+    @Published var blockQUIC: Bool = true { didSet { saveAndNotify() } }
     @Published var proxyMode: ProxyMode = .global { didSet { saveAndNotify() } }
     @Published var selectedProxyId: UUID? { didSet { saveAndNotify() } }
 
@@ -41,8 +49,43 @@ class AppConfig: ObservableObject {
         [primaryDNS, secondaryDNS].filter { !$0.isEmpty }
     }
 
+    var selectedProxy: Proxy? {
+        proxies.first { $0.id == selectedProxyId }
+    }
+
+    var usesProxy: Bool {
+        proxyMode != .direct && selectedProxy != nil
+    }
+
+    var tunnelActive: Bool {
+        tunnelEnabled && usesProxy && Tunnel.isSupported
+    }
+
+    var systemProxyActive: Bool {
+        systemProxyEnabled && !tunnelEnabled
+    }
+
+    var systemDNSActive: Bool {
+        dnsServerEnabled || tunnelActive
+    }
+
+    var firewall: Helper.Firewall {
+        guard systemProxyActive, usesProxy else { return .off }
+        let allow =
+            proxyMode == .rule
+            ? rules.filter { $0.type == .ip && $0.action == .direct }
+                .map(\.pattern)
+                .filter { Validator.isIP($0) || Validator.isCIDR($0) }
+            : []
+        return Helper.Firewall(quic: blockQUIC, webrtc: blockWebRTC, allow: allow)
+    }
+
     init() {
         load()
+    }
+
+    func refresh() {
+        saveAndNotify()
     }
 
     private func saveAndNotify() {
@@ -50,13 +93,7 @@ class AppConfig: ObservableObject {
         if save() {
             NotificationCenter.default.post(name: .configDidChange, object: nil)
         }
-    }
-
-    private func portsChanged() {
-        saveAndNotify()
-        if !isLoading && systemProxyEnabled {
-            SystemProxy.apply(true)
-        }
+        NotificationCenter.default.post(name: .systemStateDidChange, object: nil)
     }
 
     func addProxy(_ proxy: Proxy) {
@@ -110,8 +147,8 @@ class AppConfig: ObservableObject {
 
         configData["log"] = [
             "loglevel": "error",
-            "access": Tools.url("access.log").path,
-            "error": Tools.url("xray.log").path,
+            "access": Tools.accessLog.path,
+            "error": Tools.errorLog.path,
         ]
         configData["stats"] = [:]
         configData["api"] = ["tag": "api", "services": ["StatsService"]]
@@ -125,14 +162,20 @@ class AppConfig: ObservableObject {
         configData["outbounds"] = buildOutbounds()
         configData["routing"] = buildRouting()
 
-        if dnsServerEnabled {
+        if systemDNSActive {
             SystemDNS.writeConfig()
+        }
+        if tunnelActive {
+            Tunnel.writeConfig()
         }
 
         var settingsData: [String: Any] = [
             "allowLAN": allowLAN,
             "systemProxyEnabled": systemProxyEnabled,
             "dnsServerEnabled": dnsServerEnabled,
+            "tunnelEnabled": tunnelEnabled,
+            "blockWebRTC": blockWebRTC,
+            "blockQUIC": blockQUIC,
             "proxyMode": proxyMode.rawValue,
         ]
 
@@ -161,7 +204,7 @@ class AppConfig: ObservableObject {
                 withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
         else { return false }
         if (try? Data(contentsOf: url)) == data { return false }
-        try? data.write(to: url)
+        try? data.write(to: url, options: .atomic)
         return true
     }
 
@@ -186,6 +229,9 @@ class AppConfig: ObservableObject {
         }
         if let system = settings["systemProxyEnabled"] as? Bool { systemProxyEnabled = system }
         if let dns = settings["dnsServerEnabled"] as? Bool { dnsServerEnabled = dns }
+        if let tunnel = settings["tunnelEnabled"] as? Bool { tunnelEnabled = tunnel }
+        if let block = settings["blockWebRTC"] as? Bool { blockWebRTC = block }
+        if let block = settings["blockQUIC"] as? Bool { blockQUIC = block }
         if let modeStr = settings["proxyMode"] as? String, let mode = ProxyMode(rawValue: modeStr) {
             proxyMode = mode
         }
@@ -210,8 +256,7 @@ class AppConfig: ObservableObject {
     }
 
     private var udpSupported: Bool {
-        guard proxyMode != .direct, let selectedId = selectedProxyId else { return true }
-        guard let proxy = proxies.first(where: { $0.id == selectedId }) else { return true }
+        guard usesProxy, let proxy = selectedProxy else { return true }
         return proxy.type.supportsUDP
     }
 
@@ -284,9 +329,7 @@ class AppConfig: ObservableObject {
     private func buildOutbounds() -> [[String: Any]] {
         var outbounds: [[String: Any]] = []
 
-        if let selectedId = selectedProxyId,
-            let proxy = proxies.first(where: { $0.id == selectedId })
-        {
+        if let proxy = selectedProxy {
             outbounds.append(buildProxyOutbound(proxy: proxy, tag: "proxy"))
         }
 
@@ -299,6 +342,16 @@ class AppConfig: ObservableObject {
             "protocol": "freedom",
             "settings": [:],
         ])
+
+        if tunnelActive, let iface = Network.primaryInterface() {
+            outbounds = outbounds.map { outbound in
+                var outbound = outbound
+                var stream = outbound["streamSettings"] as? [String: Any] ?? [:]
+                stream["sockopt"] = ["interface": iface]
+                outbound["streamSettings"] = stream
+                return outbound
+            }
+        }
         outbounds.append([
             "tag": "blocked",
             "protocol": "blackhole",
@@ -447,7 +500,14 @@ class AppConfig: ObservableObject {
             ["type": "field", "inboundTag": ["api"], "outboundTag": "api"]
         ]
 
-        if selectedProxyId != nil {
+        if tunnelActive {
+            routingRules.append([
+                "type": "field", "network": "tcp", "port": "53",
+                "ip": [SystemDNS.bootstrapServer], "outboundTag": "direct",
+            ])
+        }
+
+        if selectedProxy != nil {
             routingRules.append([
                 "type": "field", "inboundTag": ["test"], "outboundTag": "proxy",
             ])
@@ -482,7 +542,7 @@ class AppConfig: ObservableObject {
             }
         }
 
-        let defaultTag = (proxyMode != .direct && selectedProxyId != nil) ? "proxy" : "direct"
+        let defaultTag = usesProxy ? "proxy" : "direct"
         routingRules.append([
             "type": "field", "network": "tcp,udp", "outboundTag": defaultTag,
         ])
@@ -610,4 +670,5 @@ class AppConfig: ObservableObject {
 
 extension Notification.Name {
     static let configDidChange = Notification.Name("configDidChange")
+    static let systemStateDidChange = Notification.Name("systemStateDidChange")
 }

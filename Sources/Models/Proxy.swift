@@ -48,8 +48,8 @@ struct Proxy: Identifiable, Codable, Hashable {
 
         var supportsUDP: Bool {
             switch self {
-            case .vless, .vmess, .trojan: return true
-            case .shadowsocks, .socks, .http: return false
+            case .vless, .vmess, .trojan, .shadowsocks: return true
+            case .socks, .http: return false
             }
         }
 

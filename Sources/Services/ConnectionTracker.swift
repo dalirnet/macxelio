@@ -10,7 +10,6 @@ class ConnectionTracker: ObservableObject {
     private let interval: TimeInterval = 2.0
 
     private let binaryPath = Tools.url(Tools.xray)
-    private let accessLogPath = Tools.url("access.log").path
 
     func start() {
         poll()
@@ -26,7 +25,7 @@ class ConnectionTracker: ObservableObject {
 
     private func poll() {
         let path = binaryPath
-        let logPath = accessLogPath
+        let logPath = Tools.accessLog.path
         Task.detached {
             let stats = Self.queryStats(binaryPath: path)
             let up = stats["outbound>>>proxy>>>traffic>>>uplink"] ?? 0

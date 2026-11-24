@@ -7,8 +7,6 @@ class XrayCore: ObservableObject {
 
     private var process: Process?
 
-    private let configPath = Tools.url("config.json")
-
     init() {
         NotificationCenter.default.addObserver(
             self,
@@ -36,20 +34,17 @@ class XrayCore: ObservableObject {
             error = "xray not installed"
             return
         }
-
         guard !isRunning else { return }
 
-        killStrayInstances()
-
-        try? Data().write(to: Tools.url("access.log"))
-
-        let bootLog = Tools.url("boot.log")
-        try? Data().write(to: bootLog)
-        let bootHandle = try? FileHandle(forWritingTo: bootLog)
+        Shell.run(
+            "/usr/bin/pkill", ["-U", "\(getuid())", "-f", "xray run -c \(Tools.config.path)"])
+        try? Data().write(to: Tools.accessLog)
+        try? Data().write(to: Tools.bootLog)
+        let bootHandle = try? FileHandle(forWritingTo: Tools.bootLog)
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: xrayPath)
-        proc.arguments = ["run", "-c", configPath.path]
+        proc.arguments = ["run", "-c", Tools.config.path]
         proc.standardOutput = bootHandle ?? FileHandle.nullDevice
         proc.standardError = bootHandle ?? FileHandle.nullDevice
 
@@ -59,10 +54,10 @@ class XrayCore: ObservableObject {
             proc.environment = env
         }
 
-        proc.terminationHandler = { [weak self] _ in
+        proc.terminationHandler = { [weak self] terminated in
             try? bootHandle?.close()
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, self.process === terminated else { return }
                 let unexpected = self.isRunning
                 self.isRunning = false
                 self.process = nil
@@ -82,14 +77,9 @@ class XrayCore: ObservableObject {
         }
     }
 
-    private func killStrayInstances() {
-        Shell.run("/usr/bin/pkill", ["-f", "xray run -c \(configPath.path)"])
-    }
-
-    private func failureReason() -> String {
+    static func failureReason(log bootLog: URL) -> String {
         let fallback =
             "Xray could not start. Check the configuration and that the required ports are free."
-        let bootLog = Tools.url("boot.log")
         guard let log = try? String(contentsOf: bootLog, encoding: .utf8) else { return fallback }
 
         let segments =
@@ -104,9 +94,10 @@ class XrayCore: ObservableObject {
         let port = Self.knownPort(in: text)
 
         if text.contains("address already in use") {
-            return port.map {
-                "Port \($0) is already in use by another app. Quit that app or free the port, then restart."
-            } ?? "A required port is already in use by another app."
+            guard let port else { return "A required port is already in use by another app." }
+            let owner = Network.portOwner(port).map { " by \($0)" } ?? " by another app"
+            return
+                "Port \(port) is already in use\(owner). Quit that app or free the port, then restart."
         }
         if text.contains("permission denied") {
             return port.map {
@@ -182,7 +173,7 @@ class XrayCore: ObservableObject {
     }
 
     private func alertFailure() {
-        let reason = failureReason()
+        let reason = Self.failureReason(log: Tools.bootLog)
         error = reason
 
         NSApp.activate(ignoringOtherApps: true)
@@ -207,10 +198,17 @@ class XrayCore: ObservableObject {
 
     func restart() {
         isRestarting = true
+        let previous = process
         stop()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.start()
-            self?.isRestarting = false
+        DispatchQueue.global().async { [weak self] in
+            let deadline = Date().addingTimeInterval(5)
+            while Date() < deadline && previous?.isRunning == true {
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+            DispatchQueue.main.async {
+                self?.start()
+                self?.isRestarting = false
+            }
         }
     }
 
@@ -219,10 +217,6 @@ class XrayCore: ObservableObject {
     }
 
     func getVersion() -> String? {
-        guard let xrayPath = Tools.path(Tools.xray) else { return nil }
-        let parts = Shell.output(xrayPath, ["version"])
-            .components(separatedBy: "\n").first?.components(separatedBy: " ")
-        guard let parts, parts.count >= 2 else { return nil }
-        return parts[1]
+        Tools.xrayVersion()
     }
 }
