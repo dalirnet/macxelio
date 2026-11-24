@@ -7,6 +7,7 @@ extension AppDelegate {
     }
 
     private func buildMenu(_ menu: NSMenu) {
+        menu.autoenablesItems = false
         menu.addItem(openMenuItem())
         menu.addItem(.separator())
 
@@ -17,33 +18,42 @@ extension AppDelegate {
                 submenu: proxyModeSubmenu()))
         menu.addItem(.separator())
 
+        let locked = appConfig.tunnelEnabled
         menu.addItem(
-            parentItem(
-                "System Proxy",
-                image: MenuIcon.circle(filled: appConfig.systemProxyEnabled),
-                submenu: toggleSubmenu(
-                    current: appConfig.systemProxyEnabled, action: #selector(setSystemProxy(_:)))))
+            toggleItem(
+                "System Tunnel", current: appConfig.tunnelEnabled,
+                action: #selector(setTunnel(_:))))
         menu.addItem(
-            parentItem(
-                "System DNS",
-                image: MenuIcon.circle(filled: appConfig.dnsServerEnabled),
-                submenu: toggleSubmenu(
-                    current: appConfig.dnsServerEnabled, action: #selector(setSystemDNS(_:)))))
+            toggleItem(
+                "System Proxy", current: appConfig.systemProxyActive, locked: locked,
+                action: #selector(setSystemProxy(_:))))
+        menu.addItem(
+            toggleItem(
+                "System DNS", current: appConfig.systemDNSActive, locked: locked,
+                action: #selector(setSystemDNS(_:))))
         menu.addItem(.separator())
 
         for page in MenuPage.allCases {
-            menu.addItem(pageItem(page))
+            menu.addItem(
+                pageItem(
+                    page.title, symbol: page.symbol, notification: page.notification,
+                    key: page.key, modifiers: [.command, .shift]))
         }
         menu.addItem(.separator())
 
+        menu.addItem(
+            pageItem(
+                "Settings", symbol: "gearshape", notification: .openSettings, key: ",",
+                modifiers: .command))
+        menu.addItem(.separator())
+
         menu.addItem(quitMenuItem())
+
     }
 
     private func openMenuItem() -> NSMenuItem {
         let item = NSMenuItem()
-        item.title =
-            appConfig.proxies.first { $0.id == appConfig.selectedProxyId }?.name
-            ?? "No Proxy"
+        item.title = appConfig.selectedProxy?.name ?? "No Proxy"
         if !appConfig.proxies.isEmpty {
             item.submenu = proxySubmenu()
         }
@@ -68,12 +78,9 @@ extension AppDelegate {
 
     private func applyStatus(_ status: ConnectivityChecker.Status, to item: NSMenuItem) {
         item.image = MenuIcon.statusIcon(for: status)
+        MenuIcon.keepVisible(item)
         guard #available(macOS 14.0, *) else { return }
-        if let text = status.latencyText {
-            item.badge = NSMenuItemBadge(string: text)
-        } else {
-            item.badge = nil
-        }
+        item.badge = status.latencyText.map { NSMenuItemBadge(string: $0) }
     }
 
     private func proxySubmenu() -> NSMenu {
@@ -99,15 +106,15 @@ extension AppDelegate {
         return item
     }
 
-    private func pageItem(_ page: MenuPage) -> NSMenuItem {
-        let item = NSMenuItem()
-        item.title = page.title
-        item.image = MenuIcon.symbol(page.symbol)
-        item.representedObject = page.notification
-        item.target = self
-        item.action = #selector(openPage(_:))
-        item.keyEquivalent = page.key
-        item.keyEquivalentModifierMask = [.command, .shift]
+    private func pageItem(
+        _ title: String, symbol: String, notification: Notification.Name, key: String,
+        modifiers: NSEvent.ModifierFlags
+    ) -> NSMenuItem {
+        let item = actionItem(title, action: #selector(openPage(_:)))
+        item.image = MenuIcon.symbol(symbol)
+        item.representedObject = notification
+        item.keyEquivalent = key
+        item.keyEquivalentModifierMask = modifiers
         return item
     }
 
@@ -125,8 +132,22 @@ extension AppDelegate {
         return submenu
     }
 
+    private func toggleItem(
+        _ title: String, current: Bool, locked: Bool = false, action: Selector
+    ) -> NSMenuItem {
+        let item = parentItem(
+            title, image: MenuIcon.circle(filled: current),
+            submenu: toggleSubmenu(current: current, action: action))
+        if locked {
+            item.isEnabled = false
+            item.toolTip = "Managed by System Tunnel"
+        }
+        return item
+    }
+
     private func toggleSubmenu(current: Bool, action: Selector) -> NSMenu {
         let submenu = NSMenu()
+        submenu.autoenablesItems = false
         for enabled in [true, false] {
             let item = NSMenuItem()
             item.title = enabled ? "Enabled" : "Disabled"
@@ -151,6 +172,7 @@ extension AppDelegate {
         item.title = title
         item.image = image
         item.submenu = submenu
+        MenuIcon.keepVisible(item)
         return item
     }
 
@@ -168,25 +190,28 @@ extension AppDelegate {
         }
     }
 
-    @objc func setSystemProxy(_ sender: NSMenuItem) {
-        if let enabled = sender.representedObject as? Bool {
-            appConfig.systemProxyEnabled = enabled
-            SystemProxy.apply(enabled)
+    @objc func setTunnel(_ sender: NSMenuItem) {
+        if sender.representedObject as? Bool == true && !Tunnel.isSupported {
+            Tunnel.shared.updateXray()
+            return
         }
+        setToggle(sender, \.tunnelEnabled)
+    }
+
+    @objc func setSystemProxy(_ sender: NSMenuItem) {
+        setToggle(sender, \.systemProxyEnabled)
     }
 
     @objc func setSystemDNS(_ sender: NSMenuItem) {
-        if let enabled = sender.representedObject as? Bool {
-            appConfig.dnsServerEnabled = enabled
-            DispatchQueue.global().async {
-                let success = enabled ? SystemDNS.enable() : SystemDNS.disable()
-                if !success {
-                    DispatchQueue.main.async {
-                        self.appConfig.dnsServerEnabled = !enabled
-                    }
-                }
-            }
-        }
+        setToggle(sender, \.dnsServerEnabled)
+    }
+
+    private func setToggle(
+        _ sender: NSMenuItem, _ keyPath: ReferenceWritableKeyPath<AppConfig, Bool>
+    ) {
+        guard let enabled = sender.representedObject as? Bool else { return }
+        SystemSync.shared.retry()
+        appConfig[keyPath: keyPath] = enabled
     }
 
     @objc func quitApp() {

@@ -49,6 +49,11 @@ struct SettingsView: View {
                                 .onSubmit { commitPorts() }
                         }
 
+                        FormSection("Privacy")
+
+                        guardRow("WebRTC Guard", isOn: $appConfig.blockWebRTC)
+                        guardRow("QUIC Guard", isOn: $appConfig.blockQUIC)
+
                         FormSection("DNS Server")
 
                         FormFieldRow(label: "Primary DNS", error: dnsError(appConfig.primaryDNS)) {
@@ -71,6 +76,14 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+
+    private func guardRow(_ label: String, isOn: Binding<Bool>) -> some View {
+        FormFieldRow(label: label) {
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .onChange(of: isOn.wrappedValue) { _ in SystemSync.shared.retry() }
+        }
     }
 
     private func portError(_ text: String) -> String? {

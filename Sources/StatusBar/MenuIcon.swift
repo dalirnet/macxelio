@@ -21,6 +21,12 @@ enum MenuIcon {
         }
     }
 
+    static func keepVisible(_ item: NSMenuItem) {
+        if #available(macOS 27.0, *) {
+            item.preferredImageVisibility = .visible
+        }
+    }
+
     static func symbol(_ name: String) -> NSImage? {
         let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
         image?.isTemplate = true

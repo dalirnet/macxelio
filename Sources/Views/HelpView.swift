@@ -59,12 +59,17 @@ struct HelpView: View {
                         FormSection("System")
                         card {
                             LegendRow(
+                                icon: "point.3.connected.trianglepath.dotted", color: .primary,
+                                title: "System Tunnel",
+                                detail: "Route all traffic through Macxelio, including UDP")
+                            Divider()
+                            LegendRow(
                                 icon: "network", color: .primary, title: "System Proxy",
-                                detail: "Route every app through Macxelio")
+                                detail: "Route web traffic through Macxelio")
                             Divider()
                             LegendRow(
                                 icon: "server.rack", color: .primary, title: "System DNS",
-                                detail: "Apply your DNS servers system-wide")
+                                detail: "Use your DNS servers system-wide")
                         }
 
                         FormSection("Status")
