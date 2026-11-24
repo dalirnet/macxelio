@@ -50,7 +50,6 @@ Macxelio appears in your menu bar — there's no Dock icon or window on launch. 
 
 ```bash
 make run      # build and launch
-make release  # universal release build
 ```
 
 ## License

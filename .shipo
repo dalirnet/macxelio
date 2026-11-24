@@ -1,0 +1,17 @@
+[version]
+preset  = "custom"
+source  = "Resources/Info.plist"
+pattern = "<string>{version}</string>"
+
+[bump]
+commit = "chore: bump version to {version}"
+
+[build]
+command = [
+  "bash scripts/build.sh release",
+  "bash scripts/package.sh {version}",
+]
+
+[publish]
+push    = "origin/main"
+release = "build/Macxelio-{version}.zip"

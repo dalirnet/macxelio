@@ -1,14 +1,6 @@
 .PHONY: build
 build:
-	sh dev.sh
-
-.PHONY: release
-release:
-	sh dev.sh release
-
-.PHONY: publish
-publish:
-	sh dev.sh publish
+	bash scripts/build.sh
 
 .PHONY: run
 run: build

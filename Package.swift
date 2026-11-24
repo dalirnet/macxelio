@@ -15,10 +15,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Macxelio",
-            path: "Sources",
-            resources: [
-                .process("../Assets.xcassets")
-            ]
+            path: "Sources"
         )
     ]
 )
